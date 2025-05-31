@@ -237,3 +237,66 @@ openofficeForm.addEventListener("submit", function (e) {
       alert("Error: " + error.message);
     });
 });
+
+// PDF To Word
+document.getElementById("pdfToWordForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  const form = e.target;
+  const loading = document.getElementById("pdfToWordLoading");
+  const result = document.getElementById("pdfToWordResult");
+  const downloadLink = document.getElementById("downloadWordLink");
+  const editLink = document.getElementById("editWordLink");
+  const previewContainer = document.getElementById("pdfToWordPreview");
+  const previewContent = document.getElementById("previewContent");
+
+  // Reset UI states
+  loading.style.display = "block";
+  result.style.display = "none";
+  previewContainer.style.display = "none";
+  previewContent.innerHTML = "";
+
+  const formData = new FormData(form);
+
+  fetch("http://127.0.0.1:5000/convert-pdf-to-word", {
+    method: "POST",
+    body: formData,
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      loading.style.display = "none";
+
+      if (data.error) {
+        alert("Error: " + data.error);
+        return;
+      }
+
+      const htmlPath = "http://127.0.0.1:5000/" + data.word_path;
+      const docxPath = "http://127.0.0.1:5000/" + data.word_docx_path;
+      const editorUrl = "http://127.0.0.1:5000/editor/" + data.word_filename;
+
+      // Set download and edit links
+      downloadLink.href = docxPath;
+      downloadLink.setAttribute("download", data.word_docx_path.split('/').pop());
+      editLink.href = editorUrl;
+
+      // Fetch preview content from HTML
+      fetch(htmlPath)
+        .then((res) => res.text())
+        .then((html) => {
+          previewContent.innerHTML = html;
+          previewContainer.style.display = "block";
+        })
+        .catch((err) => {
+          previewContent.innerHTML = "<p class='text-danger'>Failed to load preview.</p>";
+          previewContainer.style.display = "block";
+        });
+
+      result.style.display = "block";
+      form.reset();
+    })
+    .catch((err) => {
+      loading.style.display = "none";
+      alert("Conversion failed: " + err.message);
+    });
+});

@@ -236,12 +236,13 @@
         </a>
       </div>
 
-      <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-file-earmark-word text-primary fs-3 mb-2"></i>
-          <div class="tool-name">PDF to Word</div>
-        </a>
-      </div>
+    <div class="col">
+  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToWordModal">
+    <i class="bi bi-file-earmark-word text-primary fs-3 mb-2"></i>
+    <div class="tool-name">PDF to Word</div>
+  </a>
+</div>
+
 
       <div class="col">
         <a href="#" class="pdf-tool-box text-center">
@@ -797,6 +798,40 @@
         </div>
         <div class="modal-footer">
           <button type="submit" class="btn btn-info">Convert</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- PDF to Word Modal -->
+<div class="modal fade" id="pdfToWordModal" tabindex="-1" aria-labelledby="pdfToWordModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form id="pdfToWordForm" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title">Convert PDF to Word</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
+          </div>
+          <div id="pdfToWordLoading" style="display: none;">Converting...</div>
+          <div id="pdfToWordResult" style="display: none;">
+            <a id="downloadWordLink" class="btn btn-success mb-2" download>Download Word Document</a>
+            <a id="editWordLink" class="btn btn-primary mb-2" target="_blank">Edit Word Document</a>
+          </div>
+        </div>
+        <div id="pdfToWordPreview" class="border rounded p-3 mb-3" style="height: 300px; overflow-y: auto; display: none;">
+  <strong>Preview:</strong>
+  <div id="previewContent"></div>
+</div>
+
+
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Convert</button>
         </div>
       </form>
     </div>
