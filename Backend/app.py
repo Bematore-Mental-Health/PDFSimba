@@ -6,6 +6,14 @@ import time
 from bs4 import BeautifulSoup
 from docx import Document
 from html2docx import html2docx
+import os
+import uuid
+import pandas as pd
+from flask import Flask, request, jsonify, send_from_directory
+from PyPDF2 import PdfReader
+from flask_cors import CORS
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
 
 
 
@@ -16,6 +24,10 @@ from jpg_to_pdf import convert_jpg_file
 from cad_to_pdf import convert_cad_file
 from openoffice_to_pdf import convert_openoffice_file  
 from pdf_to_word import convert_pdf_file
+from pdf_to_excel import convert_pdf_to_excel
+from pdf_to_ppt import convert_pdf_to_ppt 
+
+
 
 
 app = Flask(__name__)
@@ -101,10 +113,12 @@ def edit_word_document(filename):
       <div class="container">
         <div class="editor-container">
           <h3 class="mb-4">Edit Your Word Document</h3>
+          <button class="btn btn-success" type="submit">Save and Download</button> 
+          <br>
           <form method="POST" action="/save-edited-word/{filename}">
             <textarea id="editor" name="content"></textarea>
             <br>
-            <button class="btn btn-success" type="submit">Save and Download</button>
+            
           </form>
         </div>
       </div>
@@ -148,6 +162,130 @@ def save_edited_word(filename):
         return f"Error saving Word file: {str(e)}", 500
 
 
+# PDF to Excel
+@app.route('/convert-pdf-to-excel', methods=['POST'])
+def convert_pdf_to_excel():
+    file = request.files.get('pdf_file')
+    if not file:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    filename = f"{uuid.uuid4()}.pdf"
+    input_path = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(input_path)
+
+    output_filename = f"{os.path.splitext(filename)[0]}.xlsx"
+    output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+
+
+    try:
+        reader = PdfReader(input_path)
+        text = ''.join(page.extract_text() or "" for page in reader.pages)
+        lines = text.splitlines()
+        data = [line.split() for line in lines if line.strip()]
+        df = pd.DataFrame(data)
+        df.to_excel(output_path, index=False, header=False)
+
+        return jsonify({
+            'excel_filename': output_filename
+        })
+    except Exception as e:
+        return jsonify({'error': f'PDF to Excel conversion failed: {str(e)}'}), 500
+
+@app.route('/download/<filename>')
+def download_excel(filename):
+    return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
+
+@app.route('/converted/<filename>')
+def serve_excel_for_preview(filename):
+    return send_from_directory(OUTPUT_FOLDER, filename)
+
+
+@app.route('/excel-editor/<filename>')
+def edit_excel(filename):
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>PDFSimba| Edit Excel</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.full.min.css">
+        <script src="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.full.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+        <style>
+            body {{ margin: 20px; font-family: sans-serif; background-color: #f9f9f9; }}
+            #excelEditor {{ width: 100%; height: 500px; margin-bottom: 20px; }}
+        </style>
+    </head>
+    <body>
+        <h2>Edit Excel File</h2>
+        <button onclick="downloadExcel()" class="btn btn-success mb-2">Save and Download</button>
+
+        <div id="excelEditor"></div>
+
+        <script>
+            let container = document.getElementById('excelEditor');
+            let hot;
+
+            fetch("/converted/{filename}")
+                .then(res => res.arrayBuffer())
+                .then(buffer => {{
+                    const workbook = XLSX.read(buffer, {{ type: "array" }});
+                    const ws = workbook.Sheets[workbook.SheetNames[0]];
+                    const data = XLSX.utils.sheet_to_json(ws, {{ header: 1 }});
+                    hot = new Handsontable(container, {{
+                        data: data,
+                        rowHeaders: true,
+                        colHeaders: true,
+                        licenseKey: 'non-commercial-and-evaluation'
+                    }});
+                }});
+
+            function downloadExcel() {{
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet(hot.getData());
+                XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+                XLSX.writeFile(wb, "edited_{filename}");
+            }}
+        </script>
+    </body>
+    </html>
+    """
+
+
+# PDF to Powerpoint
+@app.route('/convert-pdf-to-ppt', methods=['POST'])
+def convert_pdf_to_ppt_route():
+    file = request.files.get('pdf_file')
+    ppt_filename, error = convert_pdf_to_ppt(file)
+    if error:
+        return jsonify({'error': error}), 400
+    return jsonify({'ppt_filename': ppt_filename})
+
+@app.route('/ppt-editor/<filename>')
+def ppt_editor(filename):
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>PDFSimba | Edit PowerPoint</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+        <style>
+            body {{ margin: 20px; font-family: sans-serif; background-color: #f9f9f9; }}
+        </style>
+    </head>
+    <body>
+        <h2>Edit PowerPoint File</h2>
+        <p>While inline editing for PowerPoint is not supported yet, you can download and edit it in PowerPoint or Google Slides.</p>
+        <a href="/download/{filename}" class="btn btn-success">Download PowerPoint</a>
+    </body>
+    </html>
+    """
+
+@app.route('/download/<filename>')
+def download_file(filename):
+    return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
+
+    
 
 # Background thread: Auto-cleanup old files
 def cleanup_old_files(folder_paths, max_age_minutes=30, check_interval_seconds=300):

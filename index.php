@@ -244,19 +244,19 @@
 </div>
 
 
-      <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-file-earmark-excel text-success fs-3 mb-2"></i>
-          <div class="tool-name">PDF to Excel</div>
-        </a>
-      </div>
+   <div class="col">
+  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToExcelModal">
+    <i class="bi bi-file-earmark-excel text-success fs-3 mb-2"></i>
+    <div class="tool-name">PDF to Excel</div>
+  </a>
+</div>
 
-      <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-file-earmark-ppt text-danger fs-3 mb-2"></i>
-          <div class="tool-name">PDF to PowerPoint</div>
-        </a>
-      </div>
+<div class="col">
+  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToPptModal">
+    <i class="bi bi-file-earmark-ppt text-danger fs-3 mb-2"></i>
+    <div class="tool-name">PDF to PowerPoint</div>
+  </a>
+</div>
 
       <div class="col">
         <a href="#" class="pdf-tool-box text-center">
@@ -818,7 +818,10 @@
           <div class="mb-3">
             <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
           </div>
-          <div id="pdfToWordLoading" style="display: none;">Converting...</div>
+          <div id="pdfToWordLoading" style="display: none;">
+            <div class="spinner-border text-info" role="status"></div>
+            <p class="mt-2">Converting... Please wait</p>
+          </div>
           <div id="pdfToWordResult" style="display: none;">
             <a id="downloadWordLink" class="btn btn-success mb-2" download>Download Word Document</a>
             <a id="editWordLink" class="btn btn-primary mb-2" target="_blank">Edit Word Document</a>
@@ -828,7 +831,73 @@
   <strong>Preview:</strong>
   <div id="previewContent"></div>
 </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Convert</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
+<!-- PDF to Excel Modal -->
+<div class="modal fade" id="pdfToExcelModal" tabindex="-1" aria-labelledby="pdfToExcelModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form id="pdfToExcelForm" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title">Convert PDF to Excel</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
+          </div>
+          <div id="pdfToExcelLoading" style="display: none;">
+            <div class="spinner-border text-info" role="status"></div>
+            Converting... Please wait
+          </div>
+          <div id="pdfToExcelResult" style="display: none;">
+            <a id="downloadExcelLink" class="btn btn-success mb-2" download>Download Excel File</a>
+            <a id="editExcelLink" class="btn btn-primary mb-2" target="_blank">Edit Excel File</a>
+          </div>
+          <div id="pdfToExcelPreview" class="border rounded p-3 mb-3" style="height: 300px; overflow-y: auto; display: none;">
+            <strong>Preview:</strong>
+            <pre id="excelPreviewContent"></pre>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Convert</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- PDF to PowerPoint Modal -->
+<div class="modal fade" id="pdfToPptModal" tabindex="-1" aria-labelledby="pdfToPptModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form id="pdfToPptForm" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title">Convert PDF to PowerPoint</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
+          </div>
+          <div id="pdfToPptLoading" style="display: none;">
+            <div class="spinner-border text-info" role="status"></div>
+            Converting... Please wait
+          </div>
+          <div id="pdfToPptResult" style="display: none;">
+            <a id="downloadPptLink" class="btn btn-success mb-2" download>Download PowerPoint</a>
+            <a id="editPptLink" class="btn btn-primary mb-2" target="_blank">Edit PowerPoint</a>
+          </div>
+        </div>
 
         <div class="modal-footer">
           <button type="submit" class="btn btn-primary">Convert</button>
@@ -841,6 +910,8 @@
 
 <!-- PDF Tools JS -->
 <script src="./JS/pdf-tools.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

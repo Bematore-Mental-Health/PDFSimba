@@ -300,3 +300,106 @@ document.getElementById("pdfToWordForm").addEventListener("submit", function (e)
       alert("Conversion failed: " + err.message);
     });
 });
+
+// PDF  To Excel 
+document.getElementById("pdfToExcelForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  const form = e.target;
+  const loading = document.getElementById("pdfToExcelLoading");
+  const result = document.getElementById("pdfToExcelResult");
+  const downloadLink = document.getElementById("downloadExcelLink");
+  const editLink = document.getElementById("editExcelLink");
+  const previewContainer = document.getElementById("pdfToExcelPreview");
+  const previewContent = document.getElementById("excelPreviewContent");
+
+  loading.style.display = "block";
+  result.style.display = "none";
+  previewContainer.style.display = "none";
+  previewContent.textContent = "";
+
+  const formData = new FormData(form);
+
+  fetch("http://127.0.0.1:5000/convert-pdf-to-excel", {
+    method: "POST",
+    body: formData,
+  })
+    .then(res => res.json())
+    .then(data => {
+      loading.style.display = "none";
+
+      if (data.error) {
+        alert("Error: " + data.error);
+        return;
+      }
+
+      const excelPath = `http://127.0.0.1:5000/download/${data.excel_filename}`;
+      const editorUrl = `http://127.0.0.1:5000/excel-editor/${data.excel_filename}`;
+
+      downloadLink.href = excelPath;
+      editLink.href = editorUrl;
+
+      // Basic preview
+      fetch(`http://127.0.0.1:5000/converted/${data.excel_filename}`)
+        .then(res => res.arrayBuffer())
+        .then(buffer => {
+          const data = new Uint8Array(buffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const csv = XLSX.utils.sheet_to_csv(firstSheet);
+          previewContent.textContent = csv;
+          previewContainer.style.display = "block";
+        });
+
+      result.style.display = "block";
+      form.reset();
+    })
+    .catch(err => {
+      loading.style.display = "none";
+      alert("Conversion failed: " + err.message);
+    });
+});
+
+
+// PDF to Powerpoint 
+document.getElementById("pdfToPptForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  const form = e.target;
+  const loading = document.getElementById("pdfToPptLoading");
+  const result = document.getElementById("pdfToPptResult");
+  const downloadLink = document.getElementById("downloadPptLink");
+  const editLink = document.getElementById("editPptLink");
+
+  loading.style.display = "block";
+  result.style.display = "none";
+
+  const formData = new FormData(form);
+
+  fetch("http://127.0.0.1:5000/convert-pdf-to-ppt", {
+    method: "POST",
+    body: formData,
+  })
+    .then(res => res.json())
+    .then(data => {
+      loading.style.display = "none";
+
+      if (data.error) {
+        alert("Error: " + data.error);
+        return;
+      }
+
+      const pptPath = `http://127.0.0.1:5000/download/${data.ppt_filename}`;
+      const editorUrl = `http://127.0.0.1:5000/ppt-editor/${data.ppt_filename}`;
+
+      downloadLink.href = pptPath;
+      editLink.href = editorUrl;
+
+      result.style.display = "block";
+      form.reset();
+    })
+    .catch(err => {
+      loading.style.display = "none";
+      alert("Conversion failed: " + err.message);
+    });
+});
