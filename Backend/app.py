@@ -14,6 +14,17 @@ from PyPDF2 import PdfReader
 from flask_cors import CORS
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from flask import render_template
+
+
+from flask import Flask, request, jsonify, send_from_directory, send_file, render_template
+import os
+import uuid
+from pdf2image import convert_from_path
+from pptx import Presentation
+from pptx.util import Inches
+import base64
+from io import BytesIO
 
 
 
@@ -263,29 +274,41 @@ def convert_pdf_to_ppt_route():
 
 @app.route('/ppt-editor/<filename>')
 def ppt_editor(filename):
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>PDFSimba | Edit PowerPoint</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
-        <style>
-            body {{ margin: 20px; font-family: sans-serif; background-color: #f9f9f9; }}
-        </style>
-    </head>
-    <body>
-        <h2>Edit PowerPoint File</h2>
-        <p>While inline editing for PowerPoint is not supported yet, you can download and edit it in PowerPoint or Google Slides.</p>
-        <a href="/download/{filename}" class="btn btn-success">Download PowerPoint</a>
-    </body>
-    </html>
-    """
+    return render_template('ppt_editor.html', filename=filename)
+
 
 @app.route('/download/<filename>')
 def download_file(filename):
     return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
 
-    
+from io import BytesIO
+import base64
+from pptx import Presentation
+from PIL import Image
+import tempfile
+
+@app.route('/get-slide-images/<filename>')
+def get_slide_images(filename):
+    ppt_path = os.path.join(OUTPUT_FOLDER, filename)
+    if not os.path.exists(ppt_path):
+        return jsonify({'error': 'File not found'}), 404
+
+    prs = Presentation(ppt_path)
+    slide_imgs = []
+
+    for i, slide in enumerate(prs.slides):
+        # Create a blank white image
+        width = prs.slide_width // 9525  # convert EMUs to pixels (approx)
+        height = prs.slide_height // 9525
+        img = Image.new('RGB', (width, height), 'white')
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        base64_img = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        slide_imgs.append(f"data:image/png;base64,{base64_img}")
+
+    return jsonify(slide_imgs)
+
+
 
 # Background thread: Auto-cleanup old files
 def cleanup_old_files(folder_paths, max_age_minutes=30, check_interval_seconds=300):

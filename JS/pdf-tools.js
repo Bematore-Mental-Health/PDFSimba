@@ -370,9 +370,12 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
   const result = document.getElementById("pdfToPptResult");
   const downloadLink = document.getElementById("downloadPptLink");
   const editLink = document.getElementById("editPptLink");
+  const previewContainer = document.getElementById("pptSlidesContainer");
 
   loading.style.display = "block";
   result.style.display = "none";
+  editLink.hidden = true;
+  if (previewContainer) previewContainer.innerHTML = "";
 
   const formData = new FormData(form);
 
@@ -394,8 +397,26 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
 
       downloadLink.href = pptPath;
       editLink.href = editorUrl;
+      editLink.hidden = false;
 
       result.style.display = "block";
+
+      // ✅ Fetch and render slide previews
+      fetch(`http://127.0.0.1:5000/get-slide-images/${data.ppt_filename}`)
+        .then(res => res.json())
+        .then(images => {
+          if (previewContainer) {
+            previewContainer.innerHTML = "";
+            images.forEach(src => {
+              const img = document.createElement("img");
+              img.src = src;
+              img.style.maxWidth = "200px";
+              img.classList.add("img-thumbnail", "me-2", "mb-2");
+              previewContainer.appendChild(img);
+            });
+          }
+        });
+
       form.reset();
     })
     .catch(err => {
@@ -403,3 +424,4 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
       alert("Conversion failed: " + err.message);
     });
 });
+

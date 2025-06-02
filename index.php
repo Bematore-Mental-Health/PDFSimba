@@ -895,9 +895,14 @@
           </div>
           <div id="pdfToPptResult" style="display: none;">
             <a id="downloadPptLink" class="btn btn-success mb-2" download>Download PowerPoint</a>
-            <a id="editPptLink" class="btn btn-primary mb-2" target="_blank">Edit PowerPoint</a>
+            <a id="editPptLink" class="btn btn-primary mb-2" target="_blank"hidden>Edit PowerPoint</a>
           </div>
         </div>
+
+        <!-- <div id="pptSlidePreview" class="mt-3">
+        <h6>Slide Preview:</h6>
+        <div id="pptSlidesContainer" class="d-flex flex-wrap gap-2"></div>
+      </div> -->
 
         <div class="modal-footer">
           <button type="submit" class="btn btn-primary">Convert</button>
