@@ -401,7 +401,7 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
 
       result.style.display = "block";
 
-      // ✅ Fetch and render slide previews
+      // Fetch and render slide previews
       fetch(`http://127.0.0.1:5000/get-slide-images/${data.ppt_filename}`)
         .then(res => res.json())
         .then(images => {
@@ -425,3 +425,105 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
     });
 });
 
+// PDF to JPG
+ document.getElementById("pdfToJpgForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const loading = document.getElementById("pdfToJpgLoading");
+    const result = document.getElementById("pdfToJpgResult");
+    const downloadLink = document.getElementById("downloadZipLink");
+    const previewContainer = document.getElementById("jpgPreviewContainer");
+    const previewImages = document.getElementById("previewImages");
+
+    loading.style.display = "block";
+    result.style.display = "none";
+    previewImages.innerHTML = "";
+
+    const formData = new FormData(form);
+
+    fetch("http://127.0.0.1:5000/convert-pdf-to-jpg", {
+      method: "POST",
+      body: formData,
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        loading.style.display = "none";
+
+        if (data.error) {
+          alert("Error: " + data.error);
+          return;
+        }
+
+        const zipPath = `http://127.0.0.1:5000${data.zipUrl}`;
+        downloadLink.href = zipPath;
+
+        data.imageUrls.forEach((url) => {
+          const img = document.createElement("img");
+          img.src = `http://127.0.0.1:5000${url}`;
+          img.className = "img-thumbnail";
+          img.style.maxWidth = "150px";
+          img.style.maxHeight = "150px";
+          previewImages.appendChild(img);
+        });
+
+        result.style.display = "block";
+        form.reset();
+      })
+      .catch((err) => {
+        loading.style.display = "none";
+        alert("Conversion failed: " + err.message);
+      });
+  });
+
+
+//PDF To PNG
+document.getElementById("pdfToPngForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  const form = e.target;
+  const loading = document.getElementById("pdfToPngLoading");
+  const result = document.getElementById("pdfToPngResult");
+  const downloadLink = document.getElementById("downloadPngZipLink");
+  const previewContainer = document.getElementById("pngPreviewContainer");
+  const previewImages = document.getElementById("previewPngImages");
+
+  loading.style.display = "block";
+  result.style.display = "none";
+  previewImages.innerHTML = "";
+
+  const formData = new FormData(form);
+
+  fetch("http://127.0.0.1:5000/convert-pdf-to-png", {
+    method: "POST",
+    body: formData,
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      loading.style.display = "none";
+
+      if (data.error) {
+        alert("Error: " + data.error);
+        return;
+      }
+
+      const zipPath = `http://127.0.0.1:5000${data.zipUrl}`;
+      downloadLink.href = zipPath;
+
+      data.imageUrls.forEach((url) => {
+        const img = document.createElement("img");
+        img.src = `http://127.0.0.1:5000${url}`;
+        img.className = "img-thumbnail";
+        img.style.maxWidth = "150px";
+        img.style.maxHeight = "150px";
+        previewImages.appendChild(img);
+      });
+
+      result.style.display = "block";
+      form.reset();
+    })
+    .catch((err) => {
+      loading.style.display = "none";
+      alert("Conversion failed: " + err.message);
+    });
+});

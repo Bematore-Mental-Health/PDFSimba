@@ -258,19 +258,19 @@
   </a>
 </div>
 
-      <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-image text-purple fs-3 mb-2"></i>
-          <div class="tool-name">PDF to JPG</div>
-        </a>
-      </div>
+ <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToJpgModal">
+    <i class="bi bi-image text-purple fs-3 mb-2"></i>
+    <div class="tool-name">PDF to JPG</div>
+</a>
+
 
       <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-image text-indigo fs-3 mb-2"></i>
-          <div class="tool-name">PDF to PNG</div>
-        </a>
-      </div>
+  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToPngModal">
+    <i class="bi bi-image text-indigo fs-3 mb-2"></i>
+    <div class="tool-name">PDF to PNG</div>
+  </a>
+</div>
+
 
       <div class="col">
         <a href="#" class="pdf-tool-box text-center">
@@ -911,6 +911,79 @@
     </div>
   </div>
 </div>
+
+
+<!-- PDF to JPG Modal -->
+<div class="modal fade" id="pdfToJpgModal" tabindex="-1" aria-labelledby="pdfToJpgModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form id="pdfToJpgForm" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title">Convert PDF Pages to JPG</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
+          </div>
+          <div id="pdfToJpgLoading" style="display: none;">
+            <div class="spinner-border text-info" role="status"></div>
+            Converting... Please wait
+          </div>
+          <div id="pdfToJpgResult" style="display: none;">
+            <a id="downloadZipLink" class="btn btn-success mb-2" download>Download All as ZIP</a>
+            <div id="jpgPreviewContainer" class="border rounded p-3 mb-3" style="height: 300px; overflow-y: auto;">
+              <strong>Preview:</strong>
+              <div id="previewImages" class="d-flex flex-wrap gap-2"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Convert</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- PDF To PNG -->
+ <div class="modal fade" id="pdfToPngModal" tabindex="-1" aria-labelledby="pdfToPngModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form id="pdfToPngForm" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title">Convert PDF Pages to PNG</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
+          </div>
+          <div id="pdfToPngLoading" style="display: none;">
+            <div class="spinner-border text-info" role="status"></div>
+            Converting... Please wait
+          </div>
+          <div id="pdfToPngResult" style="display: none;">
+            <a id="downloadPngZipLink" class="btn btn-success mb-2" download>Download All as ZIP</a>
+            <div id="pngPreviewContainer" class="border rounded p-3 mb-3" style="height: 300px; overflow-y: auto;">
+              <strong>Preview:</strong>
+              <div id="previewPngImages" class="d-flex flex-wrap gap-2"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Convert</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
 
 
 <!-- PDF Tools JS -->

@@ -37,6 +37,8 @@ from openoffice_to_pdf import convert_openoffice_file
 from pdf_to_word import convert_pdf_file
 from pdf_to_excel import convert_pdf_to_excel
 from pdf_to_ppt import convert_pdf_to_ppt 
+from pdf_to_jpg import convert_pdf_to_jpg
+from pdf_to_png import convert_pdf_to_png
 
 
 
@@ -307,6 +309,62 @@ def get_slide_images(filename):
         slide_imgs.append(f"data:image/png;base64,{base64_img}")
 
     return jsonify(slide_imgs)
+
+
+# PDF to JPG 
+from flask import Flask, request, jsonify, send_from_directory
+from pdf_to_jpg import convert_pdf_to_jpg
+
+@app.route('/convert-pdf-to-jpg', methods=['POST'])
+def convert_pdf_to_jpg_route():
+    file = request.files.get('pdf_file')
+    if not file:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    try:
+        result = convert_pdf_to_jpg(file)
+        if result.get("error"):
+            return jsonify({'error': result["error"]}), 500
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
+
+@app.route('/converted/<filename>')
+def serve_converted_files(filename):
+    try:
+        return send_from_directory(OUTPUT_FOLDER, filename)
+    except FileNotFoundError:
+        return jsonify({'error': 'File not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+        
+
+# PDF To PNG
+@app.route('/convert-pdf-to-png', methods=['POST'])
+def convert_pdf_to_png_route():
+    file = request.files.get('pdf_file')
+    if not file:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    try:
+        result = convert_pdf_to_png(file)
+        if result.get("error"):
+            return jsonify({'error': result["error"]}), 500
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
+
+
+@app.route('/converted/<filename>')
+def serve_converted_png_files(filename):
+    try:
+        return send_from_directory(OUTPUT_FOLDER, filename)
+    except FileNotFoundError:
+        return jsonify({'error': 'File not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 
