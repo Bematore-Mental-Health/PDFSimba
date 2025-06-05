@@ -25,6 +25,9 @@ from pptx import Presentation
 from pptx.util import Inches
 import base64
 from io import BytesIO
+from flask import Flask, request, jsonify, send_file, make_response
+from PyPDF2 import PdfMerger
+
 
 
 
@@ -39,6 +42,9 @@ from pdf_to_excel import convert_pdf_to_excel
 from pdf_to_ppt import convert_pdf_to_ppt 
 from pdf_to_jpg import convert_pdf_to_jpg
 from pdf_to_png import convert_pdf_to_png
+from pdf_to_pdfa import convert_to_pdfa
+from merge_pdfs import merge_pdfs
+from split_pdfs import  split_pdf_logic
 
 
 
@@ -365,6 +371,123 @@ def serve_converted_png_files(filename):
         return jsonify({'error': 'File not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# PDF To PDF/A
+@app.route('/convert-pdf-to-pdfa', methods=['POST'])
+def convert_pdf_to_pdfa_route():
+    try:
+        file = request.files.get('pdf_file')
+        if not file:
+            return jsonify({'error': 'No file uploaded'}), 400
+
+        original_filename = file.filename
+        unique_id = str(uuid.uuid4())
+        timestamp = int(time.time())
+        uploaded_filepath = os.path.join(UPLOAD_FOLDER, f"{unique_id}_{original_filename}")
+        converted_filename = f"{unique_id}_{timestamp}_pdfa.pdf"
+        converted_filepath = os.path.join(OUTPUT_FOLDER, converted_filename)
+
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+        file.save(uploaded_filepath)
+
+        if not convert_to_pdfa(uploaded_filepath, converted_filepath):
+            return jsonify({'error': 'PDF/A conversion failed'}), 500
+
+        download_url = f'/output/{converted_filename}'
+        return jsonify({'pdfaUrl': download_url}), 200
+
+    except Exception as e:
+        print(f"Error in route: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/output/<filename>', methods=['GET'])
+def download_pdfa_file(filename):
+    return send_from_directory(OUTPUT_FOLDER, filename)
+
+
+# Merge PDFs
+@app.route('/merge-pdfs', methods=['POST'])
+def merge_pdfs_route():
+    files = request.files.getlist('pdf_files')
+    if len(files) < 2:
+        return jsonify({'error': 'At least two PDF files are required'}), 400
+
+    try:
+        output_path = merge_pdfs(files, UPLOAD_FOLDER, OUTPUT_FOLDER)
+        filename = os.path.basename(output_path)
+        return jsonify({'pdf_path': f'/output/{filename}'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/output/<filename>')
+def download_merged_pdf(filename):
+    try:
+        file_path = os.path.join(OUTPUT_FOLDER, filename)
+        response = make_response(send_file(file_path, mimetype='application/pdf'))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+    except FileNotFoundError:
+        return jsonify({'error': 'File not found'}), 404
+
+
+# Split PDFs
+from flask import Flask, request, jsonify, render_template
+
+
+@app.route('/upload-pdf', methods=['POST'])
+def upload_pdf():
+    file = request.files.get('pdf_file')
+    if not file:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    try:
+        filename = f"{uuid.uuid4()}_{file.filename}"
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(file_path)
+        return jsonify({'file_path': file_path})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/split-editor', methods=['GET'])
+def split_editor():
+    file_path = request.args.get('file')
+    if not os.path.exists(file_path):
+        return "File not found", 404
+    return render_template('split_editor.html', file_path=file_path)
+
+@app.route('/split-pdf', methods=['POST'])
+def split_pdf():
+    data = request.json
+    file_path = data.get('filePath')
+    options = {
+        'splitAfter': data.get('splitAfter'),
+        'rangeStart': data.get('rangeStart'),
+        'rangeEnd': data.get('rangeEnd'),
+        'customPages': data.get('customPages'),
+        'oddPages': data.get('oddPages'),
+        'evenPages': data.get('evenPages'),
+    }
+
+    if not file_path or not os.path.exists(file_path):
+        return jsonify({'error': 'File not found'}), 400
+
+    try:
+        output_files = split_pdf_logic(file_path, options, OUTPUT_FOLDER)
+        return jsonify({
+            'output_files': [f"/output/{os.path.basename(f)}" for f in output_files]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/output/<filename>')
+def serve_output_file(filename):
+    return send_from_directory(OUTPUT_FOLDER, filename)
 
 
 

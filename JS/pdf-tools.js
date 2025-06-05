@@ -527,3 +527,110 @@ document.getElementById("pdfToPngForm").addEventListener("submit", function (e) 
       alert("Conversion failed: " + err.message);
     });
 });
+
+
+// PDF To PDF/A
+document.getElementById("pdfToPdfaForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  const form = e.target;
+  const loading = document.getElementById("pdfToPdfaLoading");
+  const result = document.getElementById("pdfToPdfaResult");
+  const downloadLink = document.getElementById("downloadPdfaLink");
+
+  loading.style.display = "block";
+  result.style.display = "none";
+
+  const formData = new FormData(form);
+
+  fetch("http://127.0.0.1:5000/convert-pdf-to-pdfa", {
+    method: "POST",
+    body: formData,
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      loading.style.display = "none";
+
+      if (data.error) {
+        alert("Error: " + data.error);
+        return;
+      }
+
+      downloadLink.href = `http://127.0.0.1:5000${data.pdfaUrl}`;
+      result.style.display = "block";
+      form.reset();
+    })
+    .catch((err) => {
+      loading.style.display = "none";
+      alert("Conversion failed: " + err.message);
+    });
+});
+
+
+// Merge PDF 
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("mergePDFForm");
+    const loadingIndicator = document.getElementById("mergePDFLoading");
+    const pdfPreviewContainer = document.getElementById("pdfPreviewContainer");
+    const pdfPreview = document.getElementById("pdfPreview");
+    const downloadLink = document.getElementById("downloadMergedPDF");
+
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        pdfPreviewContainer.style.display = "none";
+        loadingIndicator.style.display = "block";
+
+        const formData = new FormData(form);
+
+        fetch("http://127.0.0.1:5000/merge-pdfs", {
+            method: "POST",
+            body: formData,
+        })
+        .then(response => {
+            if (!response.ok) throw new Error("Failed to merge PDFs.");
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+
+            const pdfUrl = `http://127.0.0.1:5000${data.pdf_path}?t=${Date.now()}`;
+
+            pdfPreview.src = pdfUrl;
+            pdfPreviewContainer.style.display = "block";
+
+            downloadLink.href = pdfUrl;
+            downloadLink.download = "merged.pdf";
+            downloadLink.style.display = "inline-block";
+
+            loadingIndicator.style.display = "none";
+            form.reset();
+        })
+        .catch(error => {
+            loadingIndicator.style.display = "none";
+            alert("Error: " + error.message);
+        });
+    });
+});
+
+// Split PDFs
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("splitPDFForm");
+
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+        fetch("http://127.0.0.1:5000/upload-pdf", {
+            method: "POST",
+            body: formData,
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) throw new Error(data.error);
+                const editorUrl = `http://127.0.0.1:5000/split-editor?file=${encodeURIComponent(data.file_path)}`;
+                window.open(editorUrl, "_blank");
+            })
+            .catch(error => alert("Error: " + error.message));
+    });
+});

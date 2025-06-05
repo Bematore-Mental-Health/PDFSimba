@@ -272,26 +272,28 @@
 </div>
 
 
-      <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-file-earmark-text text-secondary fs-3 mb-2"></i>
-          <div class="tool-name">PDF to PDF/A</div>
-        </a>
-      </div>
+<div class="col">
+  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToPdfaModal">
+    <i class="bi bi-file-earmark-text text-secondary fs-3 mb-2"></i>
+    <div class="tool-name">PDF to PDF/A</div>
+  </a>
+</div>
+
+
+     <div class="col">
+  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#mergePDFModal">
+    <i class="bi bi-files text-orange fs-3 mb-2"></i>
+    <div class="tool-name">Merge PDF</div>
+  </a>
+</div>
 
       <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-files text-orange fs-3 mb-2"></i>
-          <div class="tool-name">Merge PDF</div>
-        </a>
-      </div>
+  <a href="#" data-bs-toggle="modal" data-bs-target="#splitPDFModal" class="pdf-tool-box text-center">
+    <i class="bi bi-scissors text-orange fs-3 mb-2"></i>
+    <div class="tool-name">Split PDF</div>
+  </a>
+</div>
 
-      <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-scissors text-orange fs-3 mb-2"></i>
-          <div class="tool-name">Split PDF</div>
-        </a>
-      </div>
 
       <div class="col">
         <a href="#" class="pdf-tool-box text-center">
@@ -948,7 +950,7 @@
   </div>
 </div>
 
-<!-- PDF To PNG -->
+<!-- PDF to PNG -->
  <div class="modal fade" id="pdfToPngModal" tabindex="-1" aria-labelledby="pdfToPngModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
@@ -983,6 +985,87 @@
   </div>
 </div>
 
+<!-- PDF to PDF/A Modal -->
+<div class="modal fade" id="pdfToPdfaModal" tabindex="-1" aria-labelledby="pdfToPdfaModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form id="pdfToPdfaForm" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title" id="pdfToPdfaModalLabel">Convert PDF to PDF/A</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
+          </div>
+          <div id="pdfToPdfaLoading" style="display: none;">
+            <div class="spinner-border text-info" role="status"></div>
+            Converting... Please wait
+          </div>
+          <div id="pdfToPdfaResult" style="display: none;">
+            <a id="downloadPdfaLink" class="btn btn-success mb-2" download>Download PDF/A</a>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Convert</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<!-- Merge PDFs Modal -->
+<div class="modal fade" id="mergePDFModal" tabindex="-1" aria-labelledby="mergePDFModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="mergePDFModalLabel">Merge PDFs</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="mergePDFForm" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="pdfFiles" class="form-label">Select PDFs to Merge:</label>
+            <input type="file" id="pdfFiles" name="pdf_files" multiple class="form-control" accept="application/pdf" required>
+          </div>
+          <div id="mergePDFLoading" class="text-center" style="display: none;">
+            <div class="spinner-border" role="status"></div>
+            <p>Processing...</p>
+          </div>
+          <div id="pdfPreviewContainer" class="border p-2" style="display: none;">
+            <iframe id="pdfPreview" style="width: 100%; height: 400px; border: none;  display:none;"></iframe>
+          </div>
+          <button type="submit" class="btn btn-primary mt-3">Merge and Preview</button>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <a id="downloadMergedPDF" href="#" class="btn btn-success" style="display: none;">Download Merged PDF</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Split PDF Modal -->
+<div class="modal fade" id="splitPDFModal" tabindex="-1" aria-labelledby="splitPDFModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="splitPDFModalLabel">Split PDF</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="splitPDFForm" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="pdfFile" class="form-label">Upload PDF:</label>
+            <input type="file" id="pdfFile" name="pdf_file" class="form-control" accept="application/pdf" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Choose Where to Split</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 
 
 
