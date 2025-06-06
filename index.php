@@ -303,12 +303,12 @@
 </div>
 
 
-      <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-unlock-fill text-danger fs-3 mb-2"></i>
-          <div class="tool-name">Unlock PDF</div>
-        </a>
-      </div>
+    <div class="col">
+  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#unlockPDFModal">
+    <i class="bi bi-unlock-fill text-danger fs-3 mb-2"></i>
+    <div class="tool-name">Unlock PDF</div>
+  </a>
+</div>
 
     </div>
   </div>
@@ -1103,6 +1103,36 @@
   </div>
 </div>
 
+
+<!-- Unlock PDF Modal -->
+<div class="modal fade" id="unlockPDFModal" tabindex="-1" aria-labelledby="unlockPDFModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="unlockPDFModalLabel">Unlock PDF</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="unlockPDFForm" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="pdfFileUnlock" class="form-label">Upload Protected PDF:</label>
+            <input type="file" id="pdfFileUnlock" name="pdf_file" class="form-control" accept="application/pdf" required>
+          </div>
+          <div class="mb-3">
+            <label for="pdfPasswordUnlock" class="form-label">Password:</label>
+            <input type="password" id="pdfPasswordUnlock" name="password" class="form-control" required>
+          </div>
+          <div id="unlockLoading" class="text-center mb-3" style="display: none;">
+            <div class="spinner-border" role="status"></div>
+            <p>Unlocking PDF...</p>
+          </div>
+          <button type="submit" class="btn btn-primary">Unlock PDF</button>
+        </form>
+        <div id="downloadLinksUnlock" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- PDF Tools JS -->
 <script src="./JS/pdf-tools.js"></script>

@@ -673,12 +673,66 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // Protect PDF
+const backendBaseURL = "http://127.0.0.1:5000"; // Base URL of Flask backend
+
 document.getElementById("protectPDFForm").addEventListener("submit", function (e) {
   e.preventDefault();
 
   const form = this;
   const downloadLinks = document.getElementById("downloadLinksProtect");
   const loadingIndicator = document.getElementById("protectLoading");
+
+  // Clear previous results and show loading
+  downloadLinks.innerHTML = "";
+  loadingIndicator.style.display = "block";
+  form.querySelector("button[type='submit']").disabled = true;
+
+  const formData = new FormData(form);
+
+  fetch(`${backendBaseURL}/protect-pdf`, {
+    method: "POST",
+    body: formData,
+    headers: {
+      'Accept': 'application/json',
+    }
+  })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(err => {
+          throw new Error(err.error || "Failed to protect PDF");
+        });
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+
+      const link = document.createElement("a");
+      link.href = data.download_url;
+      link.className = "btn btn-success";
+      link.textContent = "Download Protected PDF";
+      link.download = data.filename || "protected.pdf";
+
+      downloadLinks.innerHTML = "";
+      downloadLinks.appendChild(link);
+    })
+    .catch(error => {
+      console.error("Error:", error);
+      downloadLinks.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+    })
+    .finally(() => {
+      loadingIndicator.style.display = "none";
+      form.querySelector("button[type='submit']").disabled = false;
+    });
+});
+
+// Unlock PDF 
+document.getElementById("unlockPDFForm").addEventListener("submit", function(e) {
+  e.preventDefault();
+
+  const form = this;
+  const downloadLinks = document.getElementById("downloadLinksUnlock");
+  const loadingIndicator = document.getElementById("unlockLoading");
   
   // Clear previous results and show loading
   downloadLinks.innerHTML = "";
@@ -687,32 +741,39 @@ document.getElementById("protectPDFForm").addEventListener("submit", function (e
 
   const formData = new FormData(form);
 
-  fetch("http://127.0.0.1:5000/protect-pdf", {
+  fetch("http://localhost:5000/unlock-pdf", {
     method: "POST",
     body: formData,
-  })
-  .then(response => {
-    if (!response.ok) {
-      return response.json().then(err => { throw new Error(err.error); });
+    headers: {
+      'Accept': 'application/json'
     }
-    return response.json();
+  })
+  .then(async response => {
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to unlock PDF");
+    }
+    return data;
   })
   .then(data => {
-    if (data.error) throw new Error(data.error);
-    
-    // Create download link with proper filename
+    // Create download link
     const link = document.createElement("a");
-    link.href = data.file_url;
+    link.href = data.download_url;
     link.className = "btn btn-success";
-    link.textContent = "Download Protected PDF";
-    link.download = data.filename || "protected.pdf";
+    link.textContent = "Download Unlocked PDF";
+    link.download = data.filename || "unlocked.pdf";
     
     downloadLinks.innerHTML = "";
     downloadLinks.appendChild(link);
+    
+    // Auto-click the download link
+    setTimeout(() => {
+      link.click();
+    }, 500);
   })
   .catch(error => {
     console.error("Error:", error);
-    downloadLinks.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+    downloadLinks.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
   })
   .finally(() => {
     loadingIndicator.style.display = "none";

@@ -62,6 +62,9 @@ OUTPUT_FOLDER = os.path.abspath(os.path.join(BASE_DIR, '..', 'converted'))
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
+
 # Word to PDF
 @app.route('/convert-word-to-pdf', methods=['POST'])
 def convert_word_route():
@@ -554,87 +557,132 @@ def split_pdf():
 # Protect PDF 
 @app.route('/protect-pdf', methods=['POST'])
 def protect_pdf():
-    # Check if files and password are present
-    if 'pdf_file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-        
-    file = request.files['pdf_file']
+    file = request.files.get('pdf_file')
     password = request.form.get('password')
-    
-    if not password:
-        return jsonify({'error': 'Password is required'}), 400
 
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    if not file or not password:
+        return jsonify({'error': 'File and password are required'}), 400
 
     try:
-        # Generate unique filenames
         original_filename = secure_filename(file.filename)
-        temp_filename = f"temp_{uuid.uuid4()}_{original_filename}"
-        protected_filename = f"protected_{uuid.uuid4()}_{original_filename}"
-        
-        # Save paths
+        temp_filename = f"{uuid.uuid4()}_{original_filename}"
         temp_path = os.path.join(UPLOAD_FOLDER, temp_filename)
+        protected_filename = f"protected_{uuid.uuid4()}_{original_filename}"
         protected_path = os.path.join(OUTPUT_FOLDER, protected_filename)
-        
-        # Save uploaded file temporarily
+
         file.save(temp_path)
-        
-        # Process PDF
+
         reader = PdfReader(temp_path)
         writer = PdfWriter()
-
-        # Copy all pages
         for page in reader.pages:
             writer.add_page(page)
-
-        # Encrypt with password
         writer.encrypt(password)
-        
-        # Save protected PDF
-        with open(protected_path, "wb") as f:
-            writer.write(f)
-        
-        # Clean up temp file
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-        
-        # Return download URL
+
+        with open(protected_path, "wb") as output_file:
+            writer.write(output_file)
+
+        os.remove(temp_path)
+
         return jsonify({
             'success': True,
             'filename': protected_filename,
             'download_url': url_for('download_protected', filename=protected_filename, _external=True)
         })
-        
+
     except Exception as e:
-        # Clean up any temporary files
-        if 'temp_path' in locals() and os.path.exists(temp_path):
-            os.remove(temp_path)
-        app.logger.error(f"Error protecting PDF: {str(e)}")
-        return jsonify({
-            'error': f"Failed to protect PDF: {str(e)}"
-        }), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/download-protected/<filename>')
 def download_protected(filename):
     try:
         file_path = os.path.join(OUTPUT_FOLDER, filename)
-        
         if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Protected file not found: {filename}")
-            
+            return jsonify({'error': 'File not found'}), 404
+        return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 404
+
+
+# Unlock PDF 
+
+@app.route('/unlock-pdf', methods=['POST'])
+def unlock_pdf():
+    try:
+        if 'pdf_file' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
+
+        file = request.files['pdf_file']
+        password = request.form.get('password')
+
+        if not password:
+            return jsonify({'error': 'Password is required'}), 400
+
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+
+        # Generate unique filenames
+        original_filename = secure_filename(file.filename)
+        temp_filename = f"temp_{uuid.uuid4()}_{original_filename}"
+        unlocked_filename = f"unlocked_{uuid.uuid4()}_{original_filename}"
+
+        # Define paths for temporary and output files
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
+        unlocked_path = os.path.join(app.config['OUTPUT_FOLDER'], unlocked_filename)
+
+        # Save uploaded file
+        file.save(temp_path)
+
+        try:
+            # Process the uploaded PDF
+            reader = PdfReader(temp_path)
+            if not reader.is_encrypted:
+                return jsonify({'error': 'PDF is not password protected'}), 400
+
+            if not reader.decrypt(password):
+                return jsonify({'error': 'Incorrect password'}), 401
+
+            writer = PdfWriter()
+            for page in reader.pages:
+                writer.add_page(page)
+
+            # Save unlocked PDF
+            with open(unlocked_path, "wb") as f:
+                writer.write(f)
+
+            return jsonify({
+                'success': True,
+                'filename': unlocked_filename,
+                'download_url': url_for('download_unlocked', filename=unlocked_filename, _external=True)
+            })
+
+        except Exception as pdf_error:
+            return jsonify({'error': f'PDF processing error: {str(pdf_error)}'}), 500
+
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+    finally:
+        # Cleanup temporary files
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.remove(temp_path)
+
+@app.route('/download-unlocked/<filename>')
+def download_unlocked(filename):
+    try:
+        file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
+
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File not found'}), 404
+
         return send_from_directory(
-            OUTPUT_FOLDER,
+            app.config['OUTPUT_FOLDER'],
             filename,
             as_attachment=True,
             mimetype='application/pdf',
             download_name=filename
         )
     except Exception as e:
-        app.logger.error(f"Error serving protected file: {str(e)}")
-        return jsonify({'error': str(e)}), 404
-
-
+        return jsonify({'error': f'Download error: {str(e)}'}), 500
 
 # Background thread: Auto-cleanup old files
 def cleanup_old_files(folder_paths, max_age_minutes=30, check_interval_seconds=600):
