@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template, url_for
 from flask_cors import CORS
 import os
 import threading
@@ -10,11 +10,14 @@ import os
 import uuid
 import pandas as pd
 from flask import Flask, request, jsonify, send_from_directory
-from PyPDF2 import PdfReader
+from PyPDF2 import PdfReader,  PdfWriter
 from flask_cors import CORS
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask import render_template
+from urllib.parse import unquote
+from werkzeug.utils import secure_filename
+
 
 
 from flask import Flask, request, jsonify, send_from_directory, send_file, render_template
@@ -417,29 +420,50 @@ def merge_pdfs_route():
         return jsonify({'error': 'At least two PDF files are required'}), 400
 
     try:
+        # Ensure directories exist
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+        
         output_path = merge_pdfs(files, UPLOAD_FOLDER, OUTPUT_FOLDER)
         filename = os.path.basename(output_path)
-        return jsonify({'pdf_path': f'/output/{filename}'})
+        
+        return jsonify({
+            'pdf_path': url_for('download_merged_pdf', filename=filename),
+            'filename': filename
+        })
     except Exception as e:
+        app.logger.error(f"Error merging PDFs: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/output/<filename>')
 def download_merged_pdf(filename):
     try:
         file_path = os.path.join(OUTPUT_FOLDER, filename)
-        response = make_response(send_file(file_path, mimetype='application/pdf'))
+        
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File {filename} not found")
+            
+        # Send file with proper headers for inline display
+        response = make_response(send_file(
+            file_path,
+            mimetype='application/pdf',
+            as_attachment=False,  # Crucial for preview
+            download_name=filename
+        ))
+        
+        # Disable caching
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        
         return response
-    except FileNotFoundError:
-        return jsonify({'error': 'File not found'}), 404
+    except Exception as e:
+        app.logger.error(f"Error serving merged PDF: {str(e)}")
+        return jsonify({'error': str(e)}), 404
 
 
 # Split PDFs
-from flask import Flask, request, jsonify, render_template
-
-
 @app.route('/upload-pdf', methods=['POST'])
 def upload_pdf():
     file = request.files.get('pdf_file')
@@ -447,52 +471,173 @@ def upload_pdf():
         return jsonify({'error': 'No file uploaded'}), 400
 
     try:
-        filename = f"{uuid.uuid4()}_{file.filename}"
+        # Create a unique filename - preserve original filename exactly
+        original_filename = secure_filename(file.filename)  
+        filename = f"{uuid.uuid4()}_{original_filename}"
         file_path = os.path.join(UPLOAD_FOLDER, filename)
+
+        # Create upload directory if it doesn't exist
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        
+        # Save the file
         file.save(file_path)
-        return jsonify({'file_path': file_path})
+
+        return jsonify({
+            'file_path': filename,  
+            'original_filename': original_filename
+        })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"Failed to upload file: {str(e)}"}), 500
 
 @app.route('/split-editor', methods=['GET'])
 def split_editor():
-    file_path = request.args.get('file')
+    filename = request.args.get('file')  
+    if not filename:
+        return jsonify({'error': 'No file specified'}), 400
+    
+    # URL decode the filename
+    decoded_filename = unquote(filename)
+    
+    # Check if file exists in uploads directory
+    file_path = os.path.join(UPLOAD_FOLDER, decoded_filename)
     if not os.path.exists(file_path):
-        return "File not found", 404
-    return render_template('split_editor.html', file_path=file_path)
+        app.logger.error(f"File not found: {file_path}")
+        return jsonify({'error': 'File not found'}), 404
+    
+    # Pass the properly encoded URL to the template
+    return render_template('split_editor.html', file_url=url_for('serve_uploaded_file', filename=filename))
 
-@app.route('/split-pdf', methods=['POST'])
-def split_pdf():
-    data = request.json
-    file_path = data.get('filePath')
-    options = {
-        'splitAfter': data.get('splitAfter'),
-        'rangeStart': data.get('rangeStart'),
-        'rangeEnd': data.get('rangeEnd'),
-        'customPages': data.get('customPages'),
-        'oddPages': data.get('oddPages'),
-        'evenPages': data.get('evenPages'),
-    }
-
-    if not file_path or not os.path.exists(file_path):
-        return jsonify({'error': 'File not found'}), 400
-
-    try:
-        output_files = split_pdf_logic(file_path, options, OUTPUT_FOLDER)
-        return jsonify({
-            'output_files': [f"/output/{os.path.basename(f)}" for f in output_files]
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+@app.route('/uploads/<filename>')
+def serve_uploaded_file(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
 @app.route('/output/<filename>')
 def serve_output_file(filename):
     return send_from_directory(OUTPUT_FOLDER, filename)
 
 
+@app.route('/split-pdf', methods=['POST'])
+def split_pdf():
+    data = request.json
+    filename = data.get('filePath')  
+    
+    if not filename:
+        return jsonify({'error': 'No filename provided'}), 400
+    
+    # URL decode the filename and reconstruct the full path
+    decoded_filename = unquote(filename)
+    file_path = os.path.join(UPLOAD_FOLDER, decoded_filename)
+    
+    if not os.path.exists(file_path):
+        app.logger.error(f"File not found at path: {file_path}")
+        app.logger.error(f"Files in upload folder: {os.listdir(UPLOAD_FOLDER)}")
+        return jsonify({'error': f"File not found at path: {file_path}"}), 400
+
+    try:
+        options = {
+            'splitAfter': data.get('splitAfter'),
+            'rangeStart': data.get('rangeStart'),
+            'rangeEnd': data.get('rangeEnd'),
+            'customPages': data.get('customPages'),
+            'oddPages': data.get('oddPages'),
+            'evenPages': data.get('evenPages'),
+        }
+        output_files = split_pdf_logic(file_path, options, OUTPUT_FOLDER)
+        return jsonify({
+            'output_files': [url_for('serve_output_file', filename=os.path.basename(f)) for f in output_files]
+        })
+    except Exception as e:
+        app.logger.error(f"Error splitting PDF: {e}")
+        return jsonify({'error': f"Failed to process PDF: {str(e)}"}), 500
+
+
+# Protect PDF 
+@app.route('/protect-pdf', methods=['POST'])
+def protect_pdf():
+    # Check if files and password are present
+    if 'pdf_file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+        
+    file = request.files['pdf_file']
+    password = request.form.get('password')
+    
+    if not password:
+        return jsonify({'error': 'Password is required'}), 400
+
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    try:
+        # Generate unique filenames
+        original_filename = secure_filename(file.filename)
+        temp_filename = f"temp_{uuid.uuid4()}_{original_filename}"
+        protected_filename = f"protected_{uuid.uuid4()}_{original_filename}"
+        
+        # Save paths
+        temp_path = os.path.join(UPLOAD_FOLDER, temp_filename)
+        protected_path = os.path.join(OUTPUT_FOLDER, protected_filename)
+        
+        # Save uploaded file temporarily
+        file.save(temp_path)
+        
+        # Process PDF
+        reader = PdfReader(temp_path)
+        writer = PdfWriter()
+
+        # Copy all pages
+        for page in reader.pages:
+            writer.add_page(page)
+
+        # Encrypt with password
+        writer.encrypt(password)
+        
+        # Save protected PDF
+        with open(protected_path, "wb") as f:
+            writer.write(f)
+        
+        # Clean up temp file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        
+        # Return download URL
+        return jsonify({
+            'success': True,
+            'filename': protected_filename,
+            'download_url': url_for('download_protected', filename=protected_filename, _external=True)
+        })
+        
+    except Exception as e:
+        # Clean up any temporary files
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.remove(temp_path)
+        app.logger.error(f"Error protecting PDF: {str(e)}")
+        return jsonify({
+            'error': f"Failed to protect PDF: {str(e)}"
+        }), 500
+
+@app.route('/download-protected/<filename>')
+def download_protected(filename):
+    try:
+        file_path = os.path.join(OUTPUT_FOLDER, filename)
+        
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Protected file not found: {filename}")
+            
+        return send_from_directory(
+            OUTPUT_FOLDER,
+            filename,
+            as_attachment=True,
+            mimetype='application/pdf',
+            download_name=filename
+        )
+    except Exception as e:
+        app.logger.error(f"Error serving protected file: {str(e)}")
+        return jsonify({'error': str(e)}), 404
+
+
 
 # Background thread: Auto-cleanup old files
-def cleanup_old_files(folder_paths, max_age_minutes=30, check_interval_seconds=300):
+def cleanup_old_files(folder_paths, max_age_minutes=30, check_interval_seconds=600):
     def run_cleanup():
         while True:
             now = time.time()

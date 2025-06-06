@@ -572,13 +572,23 @@ document.addEventListener("DOMContentLoaded", function () {
     const form = document.getElementById("mergePDFForm");
     const loadingIndicator = document.getElementById("mergePDFLoading");
     const pdfPreviewContainer = document.getElementById("pdfPreviewContainer");
-    const pdfPreview = document.getElementById("pdfPreview");
     const downloadLink = document.getElementById("downloadMergedPDF");
+    const closePreviewBtn = document.getElementById("closePreview");
+
+    // Initialize modal events
+    const mergeModal = new bootstrap.Modal(document.getElementById('mergePDFModal'));
+    
+    // Close preview handler
+    closePreviewBtn?.addEventListener("click", function() {
+        pdfPreviewContainer.style.display = "none";
+    });
 
     form.addEventListener("submit", function (e) {
         e.preventDefault();
 
+        // Reset UI
         pdfPreviewContainer.style.display = "none";
+        downloadLink.style.display = "none";
         loadingIndicator.style.display = "block";
 
         const formData = new FormData(form);
@@ -586,32 +596,53 @@ document.addEventListener("DOMContentLoaded", function () {
         fetch("http://127.0.0.1:5000/merge-pdfs", {
             method: "POST",
             body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
         })
         .then(response => {
-            if (!response.ok) throw new Error("Failed to merge PDFs.");
+            if (!response.ok) {
+                return response.json().then(err => { throw new Error(err.error || "Failed to merge PDFs"); });
+            }
             return response.json();
         })
         .then(data => {
             if (data.error) throw new Error(data.error);
 
+            // Create a fresh iframe
+            const iframeContainer = pdfPreviewContainer.querySelector('.ratio');
+            iframeContainer.innerHTML = ''; // Clear previous iframe
+            
+            const newIframe = document.createElement("iframe");
+            newIframe.id = "pdfPreview";
+            newIframe.style.width = "100%";
+            newIframe.style.height = "100%";
+            newIframe.style.border = "none";
+            
+            // Set the source with cache-busting parameter
             const pdfUrl = `http://127.0.0.1:5000${data.pdf_path}?t=${Date.now()}`;
+            newIframe.src = pdfUrl;
+            iframeContainer.appendChild(newIframe);
 
-            pdfPreview.src = pdfUrl;
+            // Update UI
             pdfPreviewContainer.style.display = "block";
-
             downloadLink.href = pdfUrl;
-            downloadLink.download = "merged.pdf";
+            downloadLink.download = data.filename || "merged.pdf";
             downloadLink.style.display = "inline-block";
-
-            loadingIndicator.style.display = "none";
-            form.reset();
+            
+            // Ensure modal is properly shown
+            mergeModal.show();
         })
         .catch(error => {
-            loadingIndicator.style.display = "none";
+            console.error("Error:", error);
             alert("Error: " + error.message);
+        })
+        .finally(() => {
+            loadingIndicator.style.display = "none";
         });
     });
 });
+
 
 // Split PDFs
 document.addEventListener("DOMContentLoaded", function () {
@@ -625,12 +656,66 @@ document.addEventListener("DOMContentLoaded", function () {
             method: "POST",
             body: formData,
         })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) throw new Error(data.error);
-                const editorUrl = `http://127.0.0.1:5000/split-editor?file=${encodeURIComponent(data.file_path)}`;
-                window.open(editorUrl, "_blank");
-            })
-            .catch(error => alert("Error: " + error.message));
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+
+            // Encode the filename for URL
+            const encodedFilename = encodeURIComponent(data.file_path);
+            const editorUrl = `http://127.0.0.1:5000/split-editor?file=${encodedFilename}`;
+            window.open(editorUrl, "_blank");
+        })
+        .catch(error => {
+            console.error("Upload error:", error);
+            alert("Error: " + error.message);
+        });
     });
+});
+
+// Protect PDF
+document.getElementById("protectPDFForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  const form = this;
+  const downloadLinks = document.getElementById("downloadLinksProtect");
+  const loadingIndicator = document.getElementById("protectLoading");
+  
+  // Clear previous results and show loading
+  downloadLinks.innerHTML = "";
+  loadingIndicator.style.display = "block";
+  form.querySelector("button[type='submit']").disabled = true;
+
+  const formData = new FormData(form);
+
+  fetch("http://127.0.0.1:5000/protect-pdf", {
+    method: "POST",
+    body: formData,
+  })
+  .then(response => {
+    if (!response.ok) {
+      return response.json().then(err => { throw new Error(err.error); });
+    }
+    return response.json();
+  })
+  .then(data => {
+    if (data.error) throw new Error(data.error);
+    
+    // Create download link with proper filename
+    const link = document.createElement("a");
+    link.href = data.file_url;
+    link.className = "btn btn-success";
+    link.textContent = "Download Protected PDF";
+    link.download = data.filename || "protected.pdf";
+    
+    downloadLinks.innerHTML = "";
+    downloadLinks.appendChild(link);
+  })
+  .catch(error => {
+    console.error("Error:", error);
+    downloadLinks.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+  })
+  .finally(() => {
+    loadingIndicator.style.display = "none";
+    form.querySelector("button[type='submit']").disabled = false;
+  });
 });

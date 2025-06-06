@@ -295,12 +295,13 @@
 </div>
 
 
-      <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-shield-lock-fill text-success fs-3 mb-2"></i>
-          <div class="tool-name">Protect PDF</div>
-        </a>
-      </div>
+     <div class="col">
+  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#protectPDFModal">
+    <i class="bi bi-shield-lock-fill text-success fs-3 mb-2"></i>
+    <div class="tool-name">Protect PDF</div>
+  </a>
+</div>
+
 
       <div class="col">
         <a href="#" class="pdf-tool-box text-center">
@@ -1034,13 +1035,18 @@
             <p>Processing...</p>
           </div>
           <div id="pdfPreviewContainer" class="border p-2" style="display: none;">
-            <iframe id="pdfPreview" style="width: 100%; height: 400px; border: none;  display:none;"></iframe>
+            <button id="closePreview" class="btn btn-sm btn-danger mb-2">Close Preview</button>
+            <div class="ratio ratio-16x9">
+              <iframe id="pdfPreview" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary mt-3">Merge and Preview</button>
         </form>
       </div>
       <div class="modal-footer">
-        <a id="downloadMergedPDF" href="#" class="btn btn-success" style="display: none;">Download Merged PDF</a>
+        <a id="downloadMergedPDF" href="#" class="btn btn-success" style="display: none;">
+          <i class="bi bi-download"></i> Download Merged PDF
+        </a>
       </div>
     </div>
   </div>
@@ -1067,6 +1073,35 @@
   </div>
 </div>
 
+<!-- Protect PDF Modal -->
+<div class="modal fade" id="protectPDFModal" tabindex="-1" aria-labelledby="protectPDFModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="protectPDFModalLabel">Protect PDF</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="protectPDFForm" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="pdfFileProtect" class="form-label">Upload PDF:</label>
+            <input type="file" id="pdfFileProtect" name="pdf_file" class="form-control" accept="application/pdf" required>
+          </div>
+          <div class="mb-3">
+            <label for="pdfPassword" class="form-label">Password:</label>
+            <input type="password" id="pdfPassword" name="password" class="form-control" required>
+          </div>
+          <div id="protectLoading" class="text-center mb-3" style="display: none;">
+            <div class="spinner-border" role="status"></div>
+            <p>Protecting PDF...</p>
+          </div>
+          <button type="submit" class="btn btn-primary">Protect PDF</button>
+        </form>
+        <div id="downloadLinksProtect" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 
 <!-- PDF Tools JS -->

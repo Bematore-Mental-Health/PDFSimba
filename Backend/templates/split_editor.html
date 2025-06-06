@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Split PDF Editor</title>
+  <title>PDFSimba | Split PDF Editor</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <link rel="icon" href="../../Media/book3.png" type="image/x-icon">
+  
   <style>
     #pdfContainer {
       height: 600px;
@@ -17,16 +19,35 @@
       margin: 10px auto;
       border: 1px solid #ddd;
     }
+    .download-link {
+      display: block;
+      margin-bottom: 10px;
+    }
+     /* Responsive layout changes */
+    @media (max-width: 768px) {
+      .options-column {
+        order: 1;
+        margin-bottom: 20px;
+      }
+      
+      .viewer-column {
+        order: 2;
+      }
+      
+      #pdfContainer {
+        height: 400px;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="container mt-4">
     <div class="row">
-      <div class="col-md-7">
+      <div class="col-md-7 viewer-column">
         <h4>PDF Viewer</h4>
         <div id="pdfContainer"></div>
       </div>
-      <div class="col-md-5">
+      <div class="col-md-5  options-column">
         <h4>Split Options</h4>
         <div class="mb-3">
           <label for="splitAfter" class="form-label">Split after every n pages:</label>
@@ -56,31 +77,49 @@
   </div>
 
   <script>
-    const filePath = "{{ file_path }}";
+    // Initialize PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    
+    // Get the file parameter from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const encodedFilename = urlParams.get('file');
+    
+    // Construct the file URL for viewing
+    const fileUrl = `/uploads/${encodedFilename}`;
     const pdfContainer = document.getElementById("pdfContainer");
-
+    
     const renderPDF = async (url) => {
       try {
         const pdf = await pdfjsLib.getDocument(url).promise;
+        pdfContainer.innerHTML = ""; // Clear previous content
+        const containerWidth = pdfContainer.clientWidth;
+
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const viewport = page.getViewport({ scale: 1 });
+          const scale = containerWidth / viewport.width;
+          const scaledViewport = page.getViewport({ scale });
+
           const canvas = document.createElement("canvas");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
+          canvas.width = scaledViewport.width;
+          canvas.height = scaledViewport.height;
+
           const context = canvas.getContext("2d");
-          await page.render({ canvasContext: context, viewport }).promise;
+          await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
+
           pdfContainer.appendChild(canvas);
         }
       } catch (error) {
         console.error("Error rendering PDF:", error);
-        alert("Failed to load the PDF. Please check the file path and server.");
+        alert("Failed to load the PDF. Please ensure the server serves the file correctly.");
       }
     };
 
-    renderPDF(filePath);
+    // Render the PDF when page loads
+    renderPDF(fileUrl);
 
     document.getElementById("splitPDF").addEventListener("click", () => {
+      // Get all the split options from the form
       const splitAfter = document.getElementById("splitAfter").value;
       const rangeStart = document.getElementById("rangeStart").value;
       const rangeEnd = document.getElementById("rangeEnd").value;
@@ -88,35 +127,70 @@
       const oddPages = document.getElementById("oddPages").checked;
       const evenPages = document.getElementById("evenPages").checked;
 
+      // Process custom pages input
+      let processedCustomPages = null;
+      if (customPages) {
+        processedCustomPages = customPages.split(',').map(item => {
+          if (item.includes('-')) {
+            const range = item.split('-').map(Number);
+            return range.length === 2 ? range : Number(item);
+          }
+          return Number(item);
+        });
+      }
+
+      // Prepare the split options
       const splitOptions = {
-        filePath: filePath,
+        filePath: encodedFilename,  // Use the encoded filename from URL
         splitAfter: splitAfter ? parseInt(splitAfter, 10) : null,
         rangeStart: rangeStart ? parseInt(rangeStart, 10) : null,
         rangeEnd: rangeEnd ? parseInt(rangeEnd, 10) : null,
-        customPages: customPages ? customPages.split(',').map(p => p.includes('-') ? p.split('-').map(Number) : parseInt(p, 10)) : null,
+        customPages: processedCustomPages,
         oddPages: oddPages,
         evenPages: evenPages,
       };
 
-      fetch("http://127.0.0.1:5000/split-pdf", {
+      const downloadLinks = document.getElementById("downloadLinks");
+      downloadLinks.innerHTML = '<div class="alert alert-info">Processing, please wait...</div>';
+
+      // Send the split request to the server
+      fetch("/split-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(splitOptions),
       })
-        .then(response => response.json())
-        .then(data => {
-          if (data.error) throw new Error(data.error);
-          const downloadLinks = document.getElementById("downloadLinks");
-          downloadLinks.innerHTML = '';
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(err => { throw new Error(err.error); });
+        }
+        return response.json();
+      })
+      .then(data => {
+        downloadLinks.innerHTML = '';
+        
+        if (data.output_files && data.output_files.length > 0) {
           data.output_files.forEach(file => {
+            const fileName = file.split('/').pop();
+            const linkContainer = document.createElement("div");
+            linkContainer.className = "download-link";
+            
             const link = document.createElement("a");
             link.href = file;
-            link.textContent = `Download ${file}`;
-            link.style.display = "block";
-            downloadLinks.appendChild(link);
+            link.textContent = `Download ${fileName}`;
+            link.className = "btn btn-success";
+            link.download = fileName;
+            
+            linkContainer.appendChild(link);
+            downloadLinks.appendChild(linkContainer);
           });
-        })
-        .catch(error => alert("Error: " + error.message));
+        } else {
+          downloadLinks.innerHTML = '<div class="alert alert-warning">No files were generated.</div>';
+        }
+      })
+      .catch(error => {
+        console.error("Error:", error);
+        downloadLinks.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+      });
     });
   </script>
 </body>
