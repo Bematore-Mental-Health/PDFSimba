@@ -530,40 +530,75 @@ document.getElementById("pdfToPngForm").addEventListener("submit", function (e) 
 
 
 // PDF To PDF/A
-document.getElementById("pdfToPdfaForm").addEventListener("submit", function (e) {
+document.getElementById("pdfToPdfaForm").addEventListener("submit", function(e) {
   e.preventDefault();
 
-  const form = e.target;
-  const loading = document.getElementById("pdfToPdfaLoading");
-  const result = document.getElementById("pdfToPdfaResult");
-  const downloadLink = document.getElementById("downloadPdfaLink");
-
-  loading.style.display = "block";
-  result.style.display = "none";
+  const form = this;
+  const resultDiv = document.getElementById("pdfaResult");
+  const loadingIndicator = document.getElementById("pdfaLoading");
+  
+  // Clear previous results and show loading
+  resultDiv.innerHTML = "";
+  loadingIndicator.style.display = "block";
+  form.querySelector("button[type='submit']").disabled = true;
 
   const formData = new FormData(form);
 
-  fetch("http://127.0.0.1:5000/convert-pdf-to-pdfa", {
+  // Make sure this points to your Flask server (port 5000)
+  fetch("http://localhost:5000/convert-to-pdfa", {
     method: "POST",
     body: formData,
+    headers: {
+      'Accept': 'application/json'
+    }
   })
-    .then((res) => res.json())
-    .then((data) => {
-      loading.style.display = "none";
-
-      if (data.error) {
-        alert("Error: " + data.error);
-        return;
+  .then(async response => {
+    const contentType = response.headers.get('content-type');
+    
+    // First try to parse as JSON
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to convert PDF");
       }
-
-      downloadLink.href = `http://127.0.0.1:5000${data.pdfaUrl}`;
-      result.style.display = "block";
-      form.reset();
-    })
-    .catch((err) => {
-      loading.style.display = "none";
-      alert("Conversion failed: " + err.message);
-    });
+      return data;
+    }
+    
+    // If not JSON, get the text and throw it as error
+    const text = await response.text();
+    throw new Error(text || "Server returned an unexpected response");
+  })
+  .then(data => {
+    // Create download link
+    const link = document.createElement("a");
+    link.href = data.download_url;
+    link.className = "btn btn-success";
+    link.textContent = "Download PDF/A File";
+    link.download = data.filename || "converted.pdf";
+    
+    resultDiv.innerHTML = `
+      <div class="alert alert-success">
+        Successfully converted to PDF/A-${data.pdfa_version}
+      </div>
+    `;
+    resultDiv.appendChild(link);
+    
+    // Auto-click the download link
+    setTimeout(() => {
+      link.click();
+    }, 500);
+  })
+  .catch(error => {
+    console.error("Error:", error);
+    resultDiv.innerHTML = `
+      <div class="alert alert-danger">
+        ${error.message || 'An error occurred during conversion'}
+      </div>`;
+  })
+  .finally(() => {
+    loadingIndicator.style.display = "none";
+    form.querySelector("button[type='submit']").disabled = false;
+  });
 });
 
 
@@ -779,4 +814,143 @@ document.getElementById("unlockPDFForm").addEventListener("submit", function(e) 
     loadingIndicator.style.display = "none";
     form.querySelector("button[type='submit']").disabled = false;
   });
+});
+
+// iWork to PDF 
+document.addEventListener('DOMContentLoaded', function() {
+  const BACKEND_URL = 'http://localhost:5000';
+  const fileInput = document.getElementById('iworkFileInput');
+  const fileInfo = document.getElementById('fileInfo');
+  const fileName = document.getElementById('fileName');
+  const convertBtn = document.getElementById('convertBtn');
+  const pdfDisplayArea = document.getElementById('pdfDisplayArea');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const convertAnotherBtn = document.getElementById('convertAnotherBtn');
+
+  let currentFile = null;
+  let pdfBlob = null;
+
+  // Reset UI function
+  function resetConversionUI() {
+    fileInput.value = '';
+    currentFile = null;
+    pdfBlob = null;
+    fileInfo.classList.add('d-none');
+    pdfDisplayArea.classList.add('d-none');
+    document.getElementById('pdfViewer').innerHTML = '';
+    convertBtn.disabled = false;
+    convertBtn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Convert to PDF';
+  }
+
+  // File selection handler
+  fileInput.addEventListener('change', function(e) {
+    if (e.target.files.length > 0) {
+      currentFile = e.target.files[0];
+      fileName.textContent = currentFile.name;
+      fileInfo.classList.remove('d-none');
+      pdfDisplayArea.classList.add('d-none');
+    }
+  });
+
+  // Convert button handler
+  convertBtn.addEventListener('click', async function() {
+    if (!currentFile) {
+      alert('Please select a file first');
+      return;
+    }
+
+    convertBtn.disabled = true;
+    convertBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Converting...';
+
+    try {
+      const formData = new FormData();
+      formData.append('file', currentFile);
+
+      // Step 1: Convert the file
+      const conversionResponse = await fetch(`${BACKEND_URL}/convert-iwork-to-pdf`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!conversionResponse.ok) throw new Error('Conversion failed');
+      
+      const result = await conversionResponse.json();
+      if (!result.success) throw new Error(result.message || 'Conversion failed');
+      
+      // Step 2: Get the PDF as blob
+      const pdfResponse = await fetch(`${BACKEND_URL}${result.pdfUrl}`);
+      pdfBlob = await pdfResponse.blob();
+      
+      // Step 3: Display PDF using PDF.js
+      const pdfObjectUrl = URL.createObjectURL(pdfBlob);
+      
+      // Show the display area immediately
+      pdfDisplayArea.classList.remove('d-none');
+      fileInfo.classList.add('d-none');
+      
+      // Render PDF using PDF.js
+     // Inside your convertBtn click handler, replace the PDF rendering part with:
+const loadingTask = pdfjsLib.getDocument(pdfObjectUrl);
+loadingTask.promise.then(function(pdf) {
+  const viewer = document.getElementById('pdfViewer');
+  viewer.innerHTML = '';
+  
+  // Get the container dimensions
+  const container = viewer.parentElement;
+  const containerWidth = container.clientWidth - 30; // Account for padding
+  
+  // Show first page
+  pdf.getPage(1).then(function(page) {
+    // Calculate scale to fit container width
+    const viewport = page.getViewport({ scale: 1.0 });
+    const scale = (containerWidth - 20) / viewport.width; // -20 for some margin
+    const scaledViewport = page.getViewport({ scale: scale });
+    
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.height = scaledViewport.height;
+    canvas.width = scaledViewport.width;
+    
+    // Add some styling classes
+    canvas.classList.add('img-fluid');
+    canvas.classList.add('mb-2');
+    canvas.style.maxWidth = '100%';
+    canvas.style.height = 'auto';
+    
+    viewer.appendChild(canvas);
+    
+    const renderContext = {
+      canvasContext: context,
+      viewport: scaledViewport
+    };
+    
+    page.render(renderContext);
+  });
+});
+
+      // Set up download
+      downloadBtn.onclick = function() {
+        const a = document.createElement('a');
+        a.href = pdfObjectUrl;
+        a.download = currentFile.name.replace(/\.[^.]+$/, '') + '.pdf';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(pdfObjectUrl);
+        }, 100);
+      };
+
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Conversion failed: ' + error.message);
+      resetConversionUI();
+    } finally {
+      convertBtn.disabled = false;
+      convertBtn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Convert to PDF';
+    }
+  });
+
+  // Convert another handler
+  convertAnotherBtn.addEventListener('click', resetConversionUI);
 });

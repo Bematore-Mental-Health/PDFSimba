@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>PDFSimba | Convert Documents Online</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.worker.min.js';</script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -12,6 +14,7 @@
     <link rel="icon" href="./Media/book3.png" type="image/x-icon">
     <link rel="stylesheet" href="./CSS/index.css" />
     <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+
 </head>
 <body>
 
@@ -229,12 +232,13 @@
         </a>
       </div>
 
-      <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-apple text-dark fs-3 mb-2"></i>
-          <div class="tool-name">iWork to PDF</div>
-        </a>
-      </div>
+<div class="col">
+  <a href="#" id="iworkToPdfTrigger" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#iworkToPdfModal">
+    <i class="bi bi-apple text-dark fs-3 mb-2"></i>
+    <div class="tool-name">iWork to PDF</div>
+  </a>
+</div>
+
 
     <div class="col">
   <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToWordModal">
@@ -988,29 +992,39 @@
 
 <!-- PDF to PDF/A Modal -->
 <div class="modal fade" id="pdfToPdfaModal" tabindex="-1" aria-labelledby="pdfToPdfaModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
-      <form id="pdfToPdfaForm" enctype="multipart/form-data">
-        <div class="modal-header">
-          <h5 class="modal-title" id="pdfToPdfaModalLabel">Convert PDF to PDF/A</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
+      <div class="modal-header">
+        <h5 class="modal-title" id="pdfToPdfaModalLabel">Convert PDF to PDF/A</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="pdfToPdfaForm" enctype="multipart/form-data">
           <div class="mb-3">
-            <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
+            <label for="pdfFileToPdfa" class="form-label">Upload PDF:</label>
+            <input type="file" id="pdfFileToPdfa" name="pdf_file" class="form-control" accept="application/pdf" required>
           </div>
-          <div id="pdfToPdfaLoading" style="display: none;">
-            <div class="spinner-border text-info" role="status"></div>
-            Converting... Please wait
+          <div class="mb-3">
+            <label for="pdfaVersion" class="form-label">PDF/A Version:</label>
+            <select id="pdfaVersion" name="pdfa_version" class="form-select">
+              <option value="1A">PDF/A-1a (Strict)</option>
+              <option value="1B" selected>PDF/A-1b (Basic)</option>
+              <option value="2A">PDF/A-2a</option>
+              <option value="2B">PDF/A-2b</option>
+              <option value="2U">PDF/A-2u</option>
+              <option value="3A">PDF/A-3a</option>
+              <option value="3B">PDF/A-3b</option>
+              <option value="3U">PDF/A-3u</option>
+            </select>
           </div>
-          <div id="pdfToPdfaResult" style="display: none;">
-            <a id="downloadPdfaLink" class="btn btn-success mb-2" download>Download PDF/A</a>
+          <div id="pdfaLoading" class="text-center mb-3" style="display: none;">
+            <div class="spinner-border" role="status"></div>
+            <p>Converting to PDF/A...</p>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-primary">Convert</button>
-        </div>
-      </form>
+          <button type="submit" class="btn btn-primary">Convert to PDF/A</button>
+        </form>
+        <div id="pdfaResult" class="mt-3"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1133,6 +1147,51 @@
     </div>
   </div>
 </div>
+
+<!-- Modal for iWork to PDF conversion -->
+<div class="modal fade" id="iworkToPdfModal" tabindex="-1" aria-labelledby="iworkToPdfModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="iworkToPdfModalLabel">Convert iWork to PDF</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="upload-area p-4 border rounded mb-3 text-center">
+          <input type="file" id="iworkFileInput" accept=".pages,.key,.numbers" class="d-none">
+          <label for="iworkFileInput" class="btn btn-primary mb-3">
+            <i class="bi bi-upload"></i> Select iWork File
+          </label>
+          <p class="small text-muted">Supports .pages, .key, and .numbers files</p>
+          <div id="fileInfo" class="mt-2 d-none">
+            <p>Selected file: <span id="fileName"></span></p>
+            <button id="convertBtn" class="btn btn-warning mt-3">
+              <i class="bi bi-file-earmark-pdf"></i> Convert to PDF
+            </button>
+          </div>
+        </div>
+<div id="pdfDisplayArea" class="d-none mt-3">
+  <h6>PDF Preview</h6>
+  <div class="pdf-preview-container" style="max-height: 60vh; overflow: auto; border: 1px solid #ddd; background: #f8f9fa;">
+    <div id="pdfViewer" class="text-center p-2"></div>
+  </div>
+  <div class="d-flex justify-content-between mt-3">
+    <button id="downloadBtn" class="btn btn-success">
+      <i class="bi bi-download"></i> Download PDF
+    </button>
+    <button id="convertAnotherBtn" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-repeat"></i> Convert Another
+    </button>
+  </div>
+</div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 
 <!-- PDF Tools JS -->
 <script src="./JS/pdf-tools.js"></script>

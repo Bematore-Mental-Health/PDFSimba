@@ -468,6 +468,23 @@ background: url(../Media/greenbg1.jpg) no-repeat center center/cover;
 .footer .text-center {
   font-size: 14px;
 }
+.pdf-preview-container {
+  border-radius: 5px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* For multi-page PDFs (if you decide to show more pages) */
+.pdf-page {
+  margin-bottom: 15px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Modal scroll adjustments */
+.modal-body {
+  overflow-y: auto;
+  max-height: 80vh;
+}
+
 
 /* Responsivness for Nav */
 /* Large Screens (Desktops ≥ 1367px) */

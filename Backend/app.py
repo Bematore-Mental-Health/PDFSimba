@@ -17,12 +17,14 @@ from flask_cors import CORS
 from flask import render_template
 from urllib.parse import unquote
 from werkzeug.utils import secure_filename
+import tempfile
+import subprocess
+
+
 
 
 
 from flask import Flask, request, jsonify, send_from_directory, send_file, render_template
-import os
-import uuid
 from pdf2image import convert_from_path
 from pptx import Presentation
 from pptx.util import Inches
@@ -64,6 +66,8 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
+app.config['ALLOWED_IWORK_EXTENSIONS'] = {'pages', 'key', 'numbers'}
+
 
 # Word to PDF
 @app.route('/convert-word-to-pdf', methods=['POST'])
@@ -380,40 +384,108 @@ def serve_converted_png_files(filename):
 
 
 # PDF To PDF/A
-@app.route('/convert-pdf-to-pdfa', methods=['POST'])
-def convert_pdf_to_pdfa_route():
+def convert_to_pdfa(input_path, output_path, pdfa_version):
+    """Convert PDF to PDF/A using Ghostscript"""
     try:
-        file = request.files.get('pdf_file')
-        if not file:
-            return jsonify({'error': 'No file uploaded'}), 400
+        # Validate PDF/A version
+        valid_versions = ['1A', '1B', '2A', '2B', '2U', '3A', '3B', '3U']
+        if pdfa_version not in valid_versions:
+            raise ValueError(f"Invalid PDF/A version. Must be one of: {', '.join(valid_versions)}")
 
-        original_filename = file.filename
-        unique_id = str(uuid.uuid4())
-        timestamp = int(time.time())
-        uploaded_filepath = os.path.join(UPLOAD_FOLDER, f"{unique_id}_{original_filename}")
-        converted_filename = f"{unique_id}_{timestamp}_pdfa.pdf"
-        converted_filepath = os.path.join(OUTPUT_FOLDER, converted_filename)
-
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-        os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-
-        file.save(uploaded_filepath)
-
-        if not convert_to_pdfa(uploaded_filepath, converted_filepath):
-            return jsonify({'error': 'PDF/A conversion failed'}), 500
-
-        download_url = f'/output/{converted_filename}'
-        return jsonify({'pdfaUrl': download_url}), 200
-
+        # Ghostscript command for PDF/A conversion
+        cmd = [
+            'gswin64',
+            '-dPDFA',
+            f'-dPDFACompatibilityPolicy={pdfa_version}',
+            '-dBATCH',
+            '-dNOPAUSE',
+            '-dNOOUTERSAVE',
+            '-dUseCIEColor',
+            '-sProcessColorModel=DeviceRGB',
+            '-sDEVICE=pdfwrite',
+            f'-sOutputFile={output_path}',
+            input_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"Ghostscript error: {result.stderr}")
+            
+        return True
     except Exception as e:
-        print(f"Error in route: {e}")
+        raise Exception(f"Conversion failed: {str(e)}")
+
+@app.route('/convert-to-pdfa', methods=['POST'])
+def convert_pdf_to_pdfa():
+    try:
+        # Check if file is present
+        if 'pdf_file' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
+            
+        file = request.files['pdf_file']
+        pdfa_version = request.form.get('pdfa_version', '1B')  # Default to PDF/A-1b
+        
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+
+        # Generate unique filenames
+        original_filename = secure_filename(file.filename)
+        temp_filename = f"temp_{uuid.uuid4()}_{original_filename}"
+        converted_filename = f"pdfa_{pdfa_version}_{uuid.uuid4()}_{original_filename}"
+        
+        # Save paths
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
+        converted_path = os.path.join(app.config['OUTPUT_FOLDER'], converted_filename)
+        
+        # Save uploaded file temporarily
+        file.save(temp_path)
+        
+        # Convert to PDF/A
+        try:
+            convert_to_pdfa(temp_path, converted_path, pdfa_version)
+            
+            # Verify the output file was created
+            if not os.path.exists(converted_path):
+                raise Exception("Output file not created")
+            
+            # Return success response
+            return jsonify({
+                'success': True,
+                'filename': converted_filename,
+                'pdfa_version': pdfa_version,
+                'download_url': url_for('download_pdfa', filename=converted_filename, _external=True)
+            })
+            
+        except Exception as conversion_error:
+            raise Exception(f"Conversion error: {str(conversion_error)}")
+            
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        # Clean up temp file if it exists
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except:
+                pass
 
-
-@app.route('/output/<filename>', methods=['GET'])
-def download_pdfa_file(filename):
-    return send_from_directory(OUTPUT_FOLDER, filename)
-
+@app.route('/download-pdfa/<filename>')
+def download_pdfa(filename):
+    try:
+        file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File not found'}), 404
+            
+        return send_from_directory(
+            app.config['OUTPUT_FOLDER'],
+            filename,
+            as_attachment=True,
+            mimetype='application/pdf',
+            download_name=filename
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Merge PDFs
 @app.route('/merge-pdfs', methods=['POST'])
@@ -683,6 +755,87 @@ def download_unlocked(filename):
         )
     except Exception as e:
         return jsonify({'error': f'Download error: {str(e)}'}), 500
+
+
+# iWork to PDF
+def allowed_iwork_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_IWORK_EXTENSIONS']
+
+def convert_iwork_to_pdf(input_path, output_path):
+    try:
+        cmd = f"soffice --headless --convert-to pdf {input_path} --outdir {os.path.dirname(output_path)}"
+        result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+        print("Conversion output:", result.stdout)
+        print("Conversion errors:", result.stderr)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Conversion error: {e.stderr}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+        return False
+
+@app.route('/convert-iwork-to-pdf', methods=['POST'])
+def handle_iwork_conversion():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': 'No file uploaded'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'message': 'No selected file'}), 400
+
+    if not allowed_iwork_file(file.filename):
+        return jsonify({'success': False, 'message': 'Invalid file type'}), 400
+
+    try:
+        filename = secure_filename(file.filename)
+        unique_id = uuid.uuid4().hex
+        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
+        file.save(upload_path)
+
+        output_filename = f"{os.path.splitext(filename)[0]}.pdf"
+        output_path = os.path.join(app.config['OUTPUT_FOLDER'], f"{unique_id}_{output_filename}")
+
+        if convert_iwork_to_pdf(upload_path, output_path):
+            pdf_url = f"/outputs/{unique_id}_{output_filename}"
+            return jsonify({
+                'success': True,
+                'pdfUrl': pdf_url,
+                'filename': output_filename
+            })
+        return jsonify({'success': False, 'message': 'Conversion failed'}), 500
+    except Exception as e:
+        print(f"Server error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Server error during conversion'}), 500
+
+
+@app.route('/outputs/<filename>')
+def serve_iwork_pdf(filename):
+    try:
+        file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
+        if not os.path.exists(file_path):
+            return jsonify({'success': False, 'message': 'File not found'}), 404
+        
+        # Send file with correct headers
+        response = make_response(send_file(
+            file_path,
+            mimetype='application/pdf',
+            as_attachment=False,
+            download_name=filename
+        ))
+        
+        # Critical headers to prevent caching issues
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+        
+    except Exception as e:
+        print(f"Error serving PDF: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error serving PDF'}), 500
+
+
 
 # Background thread: Auto-cleanup old files
 def cleanup_old_files(folder_paths, max_age_minutes=30, check_interval_seconds=600):
