@@ -11,9 +11,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
     <link rel="icon" href="./Media/book3.png" type="image/x-icon">
     <link rel="stylesheet" href="./CSS/index.css" />
+    <link rel="stylesheet" href="./CSS/tools.css" />
     <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+
 
 </head>
 <body>
@@ -36,9 +40,9 @@
             <li><a class="dropdown-item" href="#">Image to Text</a></li>
           </ul>
         </li>
-       <li class="nav-item"><a class="nav-link" href="#features">Features</a></li>
-  <li class="nav-item"><a class="nav-link" href="#use-cases">Use Cases</a></li>
-  <li class="nav-item"><a class="nav-link" href="#faqs">FAQs</a></li>
+          <li class="nav-item"><a class="nav-link" href="index.php#features">Features</a></li>
+  <li class="nav-item"><a class="nav-link" href="index.php#use-cases">Use Cases</a></li>
+  <li class="nav-item"><a class="nav-link" href="index.php#faqs">FAQs</a></li>
       </ul>
       <div class="d-flex align-items-center">
         <a href="index.php" class="text-dark me-3"><i class="fa-regular fa-user user-icon"></i></a>
@@ -48,513 +52,48 @@
   </div>
 </nav>
 
-<!-- Hero Section -->
-<section class="hero-section">
-  <div class="container">
-    <div class="row align-items-center">
-      <!-- Text -->
-      <div class="col-lg-6 hero-text">
-        <p class="hero-subtitle img-underlined">Start to new journey</p>
-        <h1>Best <span class="highlight">online</span> tools to convert your documents</h1>
-        <p>Fast and secure document conversion: PDF to Word, Excel, PPT and more. Built for professionals and students.</p>
-        <a href="#tools" class="btn btn-dark-rounded mt-3">Upload Document</a>
+<div class="container py-4">
+    <div class="row">
+      <!-- Convert to PDF -->
+      <div class="col-md-3">
+        <div class="tool-category">CONVERT TO PDF</div>
+        <a href="#" class="tool-link"><i class="fab fa-microsoft icon-blue"></i> Word to PDF</a>
+        <a href="#" class="tool-link"><i class="fab fa-microsoft icon-green"></i> Excel to PDF</a>
+        <a href="#" class="tool-link"><i class="fab fa-microsoft icon-orange"></i> PowerPoint to PDF</a>
+        <a href="#" class="tool-link"><i class="fas fa-image icon-purple"></i> JPG to PDF</a>
+        <a href="#" class="tool-link"><i class="fas fa-drafting-compass icon-pink"></i> AutoCAD to PDF</a>
+        <a href="#" class="tool-link"><i class="fas fa-file-alt icon-cyan"></i> OpenOffice to PDF</a>
+        <a href="#" class="tool-link"><i class="fas fa-book icon-yellow"></i> eBooks to PDF</a>
+        <a href="#" class="tool-link"><i class="fab fa-apple icon-dark"></i> iWork to PDF</a>
       </div>
 
-      <!-- Image -->
-      <div class="col-lg-6 text-center position-relative">
-        <img src="./Media/b1.png" alt="Hero" class="hero-img img-fluid">
-        <div class="icon-badge"><i class="fa-solid fa-lightbulb"></i></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Shapes -->
-  <div class="shape-circle shape-orange-ring"></div>
-  <div class="shape-circle shape-teal"></div>
-  <div class="shape-circle shape-pink"></div>
-</section>
-
-<!-- Features Section -->
-<section class="py-5 bg-white" id="features">
-  <div class="container">
-    <div class="row align-items-center">
-      <!-- Left Text Content with more explanation -->
-      <div class="col-md-6 mb-4 mb-md-0">
-        <span class="badge mb-2 px-3 py-1 features-title">What We Do</span>
-        <h2 class="fw-bold">Start Improving Your Document Workflow Today</h2>
-        <p class="text-muted">
-          Whether you're converting, editing, or securing your PDF documents, our all-in-one platform offers
-          the tools you need to stay efficient. Save time and effort by using streamlined solutions tailored
-          for your everyday business and personal document needs.
-        </p>
-        <p class="text-muted">
-          Our services are built for professionals, students, and teams who want to simplify their digital
-          document tasks 
-        </p>
-         <a href="#" class="btn upload-document">Upload Document</a>
+      <!-- Convert from PDF -->
+      <div class="col-md-3">
+        <div class="tool-category">CONVERT FROM PDF</div>
+        <a href="#" class="tool-link"><i class="fas fa-file-word icon-blue"></i> PDF to Word</a>
+        <a href="#" class="tool-link"><i class="fas fa-file-excel icon-green"></i> PDF to Excel</a>
+        <a href="#" class="tool-link"><i class="fas fa-file-powerpoint icon-orange"></i> PDF to PowerPoint</a>
+        <a href="#" class="tool-link"><i class="fas fa-image icon-purple"></i> PDF to JPG</a>
+        <a href="#" class="tool-link"><i class="fas fa-image icon-pink"></i> PDF to PNG</a>
+        <a href="#" class="tool-link"><i class="fas fa-file-pdf icon-dark"></i> PDF to PDF/A</a>
       </div>
 
-      <!-- Right Features Grid with PDF tools -->
-      <div class="col-md-6">
-        <div class="row g-4">
-          <!-- Feature 1 -->
-          <div class="col-6 d-flex align-items-start">
-            <div class="icon-box bg-primary bg-opacity-25 text-primary me-3">
-              <i class="bi bi-file-earmark-word fs-4"></i>
-            </div>
-            <div>
-              <div class="fw-bold">Word to PDF</div>
-              <small class="text-muted">Convert DOCX files easily</small>
-            </div>
-          </div>
+      <!-- Merge and Split -->
+      <div class="col-md-3">
+        <div class="tool-category">MERGE AND SPLIT</div>
+        <a href="#" class="tool-link"><i class="fas fa-file-import icon-orange"></i> Merge PDF</a>
+        <a href="#" class="tool-link"><i class="fas fa-columns icon-orange"></i> Split PDF</a>
+      </div>
 
-          <!-- Feature 2 -->
-          <div class="col-6 d-flex align-items-start">
-            <div class="icon-box bg-success bg-opacity-25 text-success me-3">
-              <i class="bi bi-file-earmark-excel fs-4"></i>
-            </div>
-            <div>
-              <div class="fw-bold">Excel to PDF</div>
-              <small class="text-muted">Perfect formatting every time</small>
-            </div>
-          </div>
-
-          <!-- Feature 3 -->
-          <div class="col-6 d-flex align-items-start">
-            <div class="icon-box bg-danger bg-opacity-25 text-danger me-3">
-              <i class="bi bi-file-earmark-ppt fs-4"></i>
-            </div>
-            <div>
-              <div class="fw-bold">PowerPoint to PDF</div>
-              <small class="text-muted">Slides preserved in high quality</small>
-            </div>
-          </div>
-
-          <!-- Feature 4 -->
-          <div class="col-6 d-flex align-items-start">
-            <div class="icon-box bg-warning bg-opacity-25 text-warning me-3">
-              <i class="bi bi-filetype-pdf fs-4"></i>
-            </div>
-            <div>
-              <div class="fw-bold">Merge PDFs</div>
-              <small class="text-muted">Combine multiple files fast</small>
-            </div>
-          </div>
-
-          <!-- Feature 5 -->
-          <div class="col-6 d-flex align-items-start">
-            <div class="icon-box bg-info bg-opacity-25 text-info me-3">
-              <i class="bi bi-shield-lock-fill fs-4"></i>
-            </div>
-            <div>
-              <div class="fw-bold">Protect PDFs</div>
-              <small class="text-muted">Encrypt with password</small>
-            </div>
-          </div>
-
-          <!-- Feature 6 -->
-          <div class="col-6 d-flex align-items-start">
-            <div class="icon-box bg-secondary bg-opacity-25 text-secondary me-3">
-              <i class="bi bi-unlock-fill fs-4"></i>
-            </div>
-            <div>
-              <div class="fw-bold">Unlock PDFs</div>
-              <small class="text-muted">Remove restrictions easily</small>
-            </div>
-          </div>
-        </div>
+      <!-- PDF Security -->
+      <div class="col-md-3">
+        <div class="tool-category">PDF SECURITY</div>
+        <a href="#" class="tool-link"><i class="fas fa-lock icon-teal"></i> Protect PDF</a>
+        <a href="#" class="tool-link"><i class="fas fa-key icon-teal"></i> Unlock PDF</a>
       </div>
     </div>
   </div>
-</section>
 
-<!-- PDF Tools Grid Section -->
-<section class="pdf-tools-section py-5 bg-light">
-  <div class="container">
-    <h2 class="text-center fw-bold mb-5">All-in-One PDF Tools</h2>
-    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-6 g-3">
-      
-      <!-- Tool -->
-      <div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#wordToPdfModal">
-    <i class="bi bi-file-earmark-word text-primary fs-3 mb-2"></i>
-    <div class="tool-name">Word to PDF</div>
-  </a>
-</div>
-
-
-      <div class="col">
-  <a href="#" 
-     class="pdf-tool-box text-center"
-     data-bs-toggle="modal"
-     data-bs-target="#excelToPdfModal">
-    <i class="bi bi-file-earmark-excel text-success fs-3 mb-2"></i>
-    <div class="tool-name">Excel to PDF</div>
-  </a>
-</div>
-
-
-  <div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pptToPdfModal">
-    <i class="bi bi-file-earmark-ppt text-danger fs-3 mb-2"></i>
-    <div class="tool-name">PowerPoint to PDF</div>
-  </a>
-</div>
-
-
-<div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#jpgToPdfModal">
-    <i class="bi bi-image text-purple fs-3 mb-2"></i>
-    <div class="tool-name">JPG to PDF</div>
-  </a>
-</div>
-
-
- <div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#cadToPdfModal">
-    <i class="bi bi-vector-pen text-pink fs-3 mb-2"></i>
-    <div class="tool-name">AutoCAD to PDF</div>
-  </a>
-</div>
-
-<div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#openofficeToPdfModal">
-    <i class="bi bi-journal-code text-info fs-3 mb-2"></i>
-    <div class="tool-name">OpenOffice to PDF</div>
-  </a>
-</div>
-
-
-      <div class="col">
-        <a href="#" class="pdf-tool-box text-center">
-          <i class="bi bi-book text-warning fs-3 mb-2"></i>
-          <div class="tool-name">eBooks to PDF</div>
-        </a>
-      </div>
-
-<div class="col">
-  <a href="#" id="iworkToPdfTrigger" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#iworkToPdfModal">
-    <i class="bi bi-apple text-dark fs-3 mb-2"></i>
-    <div class="tool-name">iWork to PDF</div>
-  </a>
-</div>
-
-
-    <div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToWordModal">
-    <i class="bi bi-file-earmark-word text-primary fs-3 mb-2"></i>
-    <div class="tool-name">PDF to Word</div>
-  </a>
-</div>
-
-
-   <div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToExcelModal">
-    <i class="bi bi-file-earmark-excel text-success fs-3 mb-2"></i>
-    <div class="tool-name">PDF to Excel</div>
-  </a>
-</div>
-
-<div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToPptModal">
-    <i class="bi bi-file-earmark-ppt text-danger fs-3 mb-2"></i>
-    <div class="tool-name">PDF to PowerPoint</div>
-  </a>
-</div>
-
- <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToJpgModal">
-    <i class="bi bi-image text-purple fs-3 mb-2"></i>
-    <div class="tool-name">PDF to JPG</div>
-</a>
-
-
-      <div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToPngModal">
-    <i class="bi bi-image text-indigo fs-3 mb-2"></i>
-    <div class="tool-name">PDF to PNG</div>
-  </a>
-</div>
-
-
-<div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#pdfToPdfaModal">
-    <i class="bi bi-file-earmark-text text-secondary fs-3 mb-2"></i>
-    <div class="tool-name">PDF to PDF/A</div>
-  </a>
-</div>
-
-
-     <div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#mergePDFModal">
-    <i class="bi bi-files text-orange fs-3 mb-2"></i>
-    <div class="tool-name">Merge PDF</div>
-  </a>
-</div>
-
-      <div class="col">
-  <a href="#" data-bs-toggle="modal" data-bs-target="#splitPDFModal" class="pdf-tool-box text-center">
-    <i class="bi bi-scissors text-orange fs-3 mb-2"></i>
-    <div class="tool-name">Split PDF</div>
-  </a>
-</div>
-
-
-     <div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#protectPDFModal">
-    <i class="bi bi-shield-lock-fill text-success fs-3 mb-2"></i>
-    <div class="tool-name">Protect PDF</div>
-  </a>
-</div>
-
-
-    <div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#unlockPDFModal">
-    <i class="bi bi-unlock-fill text-danger fs-3 mb-2"></i>
-    <div class="tool-name">Unlock PDF</div>
-  </a>
-</div>
-
-    </div>
-  </div>
-</section>
-
-
-<!-- Experience Section Start -->
-<section class="py-5 bg-white">
-  <div class="container experience-section">
-    <div class="row align-items-center">
-      <!-- Left Side -->
-      <div class="col-md-6 text-center position-relative">
-        <div class="image-stack">
-          <img src="./Media/document2.png" alt="Document 1" class="image1">
-          <img src="./Media/document1.jpg" alt="Document 2" class="image2">
-          <div class="experience-badge">
-            <h4 class="fw-bold">16</h4>
-            <div>
-              <div class="small">Years of</div>
-              <div class="fw-bold">Experience</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Right Side -->
-      <div class="col-md-6 mt-5 mt-md-0">
-        <p class="text-uppercase  fw-bold">Get to know us</p>
-        <h2 class="fw-bold mb-3">Master your documents from anywhere</h2>
-        <p class="text-muted mb-4">
-          Easily convert, edit, merge, split, and manage your documents all in one place. Whether you're on the go or at your desk, streamline your workflow with our powerful document tools.
-        </p>
-
-        <div class="row mb-4">
-          <div class="col-6 mb-2">
-            <div class="d-flex align-items-center">
-              <div class="me-2 bg-danger text-white feature-icon"><i class="bi bi-check-circle-fill"></i></div>
-              <span>Expert support</span>
-            </div>
-          </div>
-          <div class="col-6 mb-2">
-            <div class="d-flex align-items-center">
-              <div class="me-2 bg-primary text-white feature-icon"><i class="bi bi-laptop-fill"></i></div>
-              <span>Online tools</span>
-            </div>
-          </div>
-          <div class="col-6 mb-2">
-            <div class="d-flex align-items-center">
-              <div class="me-2 bg-warning text-white feature-icon"><i class="bi bi-infinity"></i></div>
-              <span>Lifetime access</span>
-            </div>
-          </div>
-          <div class="col-6 mb-2">
-            <div class="d-flex align-items-center">
-              <div class="me-2 bg-success text-white feature-icon"><i class="bi bi-graph-up-arrow"></i></div>
-              <span>Great results</span>
-            </div>
-          </div>
-        </div>
-
-        <a href="#" class="btn btn-dark px-4 py-2">Discover More</a>
-      </div>
-    </div>
-  </div>
-</section>
-<!-- Section End -->
-
-<!-- Use Case Section -->
-<section class="use-cases py-5 bg-white" id="use-cases">
-  <div class="container">
-    <!-- Tabs -->
-<div class="d-flex justify-content-center flex-wrap gap-3 mb-5 use-case-tabs">
-  <button class="btn btn-outline-success active">To Word</button>
-  <button class="btn btn-outline-success">To PDF</button>
-  <button class="btn btn-outline-success">To Excel</button>
-  <button class="btn btn-outline-success">To JPG</button>
-  <button class="btn btn-outline-success">Merge PDF</button>
-  <button class="btn btn-outline-success">Unlock PDF</button>
-</div>
-
-
-    <!-- Cards -->
-    <div class="row g-4">
-      <!-- Card 1 -->
-      <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-          <img src="./Media/students.jpg" class="card-img-top" alt="Student Use Case">
-          <div class="card-body">
-            <h5 class="card-title">Students</h5>
-            <p class="card-text text-muted">Easily convert assignments and course materials into shareable PDFs.</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="text-success fw-bold">Free Access</span>
-              <div class="text-warning small">★★★★★</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Card 2 -->
-      <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-          <img src="./Media/legalprofessional.png" class="card-img-top" alt="Legal Professionals Use Case">
-          <div class="card-body">
-            <h5 class="card-title">Legal Professionals</h5>
-            <p class="card-text text-muted">Securely manage contracts and client documents with encryption tools.</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="text-success fw-bold">Premium Tools</span>
-              <div class="text-warning small">★★★★★</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Card 3 -->
-      <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-          <img src="./Media/educators.jpg" class="card-img-top" alt="Educators Use Case">
-          <div class="card-body">
-            <h5 class="card-title">Educators</h5>
-            <p class="card-text text-muted">Convert lecture notes and quizzes into polished PDF handouts.</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="text-success fw-bold">Time-Saving</span>
-              <div class="text-warning small">★★★★☆</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Card 4 -->
-      <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-          <img src="./Media/remoteteam.jpeg" class="card-img-top" alt="Remote Teams Use Case">
-          <div class="card-body">
-            <h5 class="card-title">Remote Teams</h5>
-            <p class="card-text text-muted">Collaborate on PDFs in real-time with easy merge and edit features.</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="text-success fw-bold">Collaborative</span>
-              <div class="text-warning small">★★★★★</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Card 5 -->
-      <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-          <img src="./Media/marketing.jpg" class="card-img-top" alt="Marketing Teams Use Case">
-          <div class="card-body">
-            <h5 class="card-title">Marketing Teams</h5>
-            <p class="card-text text-muted">Share branded presentations and pitch decks with clients in PDF format.</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="text-success fw-bold">Professional</span>
-              <div class="text-warning small">★★★★☆</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Card 6 -->
-      <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-          <img src="./Media/freelancers.jpg" class="card-img-top" alt="Freelancers Use Case">
-          <div class="card-body">
-            <h5 class="card-title">Freelancers</h5>
-            <p class="card-text text-muted">Send portfolios and invoices quickly in secure PDF formats.</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="text-success fw-bold">Secure</span>
-              <div class="text-warning small">★★★★★</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<!-- FAQs Section -->
-<section class="faq-section py-5 bg-light" id="faqs">
-  <div class="container">
-    <h2 class="text-center mb-4 fw-bold">Frequently Asked Questions</h2>
-    <p class="text-center text-muted mb-5">Everything you need to know about using our PDF tools.</p>
-
-    <div class="accordion" id="faqAccordion">
-      <!-- FAQ Item 1 -->
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="faqHeading1">
-          <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse1" aria-expanded="true" aria-controls="faqCollapse1">
-            What file types can I convert to PDF?
-          </button>
-        </h2>
-        <div id="faqCollapse1" class="accordion-collapse collapse show" aria-labelledby="faqHeading1" data-bs-parent="#faqAccordion">
-          <div class="accordion-body">
-            You can convert Word, Excel, PowerPoint, JPG, AutoCAD, eBooks, and many other formats into PDF using our tool.
-          </div>
-        </div>
-      </div>
-
-      <!-- FAQ Item 2 -->
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="faqHeading2">
-          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse2" aria-expanded="false" aria-controls="faqCollapse2">
-            Is there a limit to how many PDFs I can convert?
-          </button>
-        </h2>
-        <div id="faqCollapse2" class="accordion-collapse collapse" aria-labelledby="faqHeading2" data-bs-parent="#faqAccordion">
-          <div class="accordion-body">
-            No, there is no daily limit. You can convert as many files as you like for free.
-          </div>
-        </div>
-      </div>
-
-      <!-- FAQ Item 3 -->
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="faqHeading3">
-          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse3" aria-expanded="false" aria-controls="faqCollapse3">
-            Are my files secure?
-          </button>
-        </h2>
-        <div id="faqCollapse3" class="accordion-collapse collapse" aria-labelledby="faqHeading3" data-bs-parent="#faqAccordion">
-          <div class="accordion-body">
-            Absolutely. We use SSL encryption and delete all files permanently from our servers after 1 hour.
-          </div>
-        </div>
-      </div>
-
-      <!-- FAQ Item 4 -->
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="faqHeading4">
-          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse4" aria-expanded="false" aria-controls="faqCollapse4">
-            Can I merge multiple PDFs into one?
-          </button>
-        </h2>
-        <div id="faqCollapse4" class="accordion-collapse collapse" aria-labelledby="faqHeading4" data-bs-parent="#faqAccordion">
-          <div class="accordion-body">
-            Yes, our Merge PDF tool allows you to combine multiple PDF documents into a single file in seconds.
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
 
 <!-- Footer Section -->
 <footer class="footer bg-dark text-white pt-5 pb-4">
