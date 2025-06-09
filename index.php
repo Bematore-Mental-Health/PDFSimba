@@ -329,10 +329,10 @@
           <img src="./Media/document2.png" alt="Document 1" class="image1">
           <img src="./Media/document1.jpg" alt="Document 2" class="image2">
           <div class="experience-badge">
-            <h4 class="fw-bold">16</h4>
+            <h4 class="fw-bold">20+</h4>
             <div>
-              <div class="small">Years of</div>
-              <div class="fw-bold">Experience</div>
+              <div class="small">Conversion</div>
+              <div class="fw-bold">Tools</div>
             </div>
           </div>
         </div>
@@ -385,12 +385,12 @@
   <div class="container">
     <!-- Tabs -->
 <div class="d-flex justify-content-center flex-wrap gap-3 mb-5 use-case-tabs">
-  <button class="btn btn-outline-success active">To Word</button>
-  <button class="btn btn-outline-success">To PDF</button>
-  <button class="btn btn-outline-success">To Excel</button>
-  <button class="btn btn-outline-success">To JPG</button>
-  <button class="btn btn-outline-success">Merge PDF</button>
-  <button class="btn btn-outline-success">Unlock PDF</button>
+  <button class="btn btn-outline-success active" data-bs-toggle="modal" data-bs-target="#pdfToWordModal">To Word</button>
+  <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#jpgToPdfModal">To PDF</button>
+  <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#pdfToExcelModal">To Excel</button>
+  <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#pdfToJpgModal">To JPG</button>
+  <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#mergePDFModal">Merge PDF</button>
+  <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#unlockPDFModal">Unlock PDF</button>
 </div>
 
 
