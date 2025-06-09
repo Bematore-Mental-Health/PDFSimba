@@ -35,12 +35,12 @@
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Tools</a>
           <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="#">PDF to Word</a></li>
-            <li><a class="dropdown-item" href="#">Excel to PDF</a></li>
-            <li><a class="dropdown-item" href="#">Image to Text</a></li>
+            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#pdfToWordModal">PDF to Word</a></li>
+            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#excelToPdfModal">Excel to PDF</a></li>
+            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#jpgToPdfModal">JPG To PDF</a></li>
           </ul>
         </li>
-          <li class="nav-item"><a class="nav-link" href="index.php#features">Features</a></li>
+       <li class="nav-item"><a class="nav-link" href="index.php#features">Features</a></li>
   <li class="nav-item"><a class="nav-link" href="index.php#use-cases">Use Cases</a></li>
   <li class="nav-item"><a class="nav-link" href="index.php#faqs">FAQs</a></li>
       </ul>
@@ -57,39 +57,39 @@
       <!-- Convert to PDF -->
       <div class="col-md-3">
         <div class="tool-category">CONVERT TO PDF</div>
-        <a href="#" class="tool-link"><i class="fab fa-microsoft icon-blue"></i> Word to PDF</a>
-        <a href="#" class="tool-link"><i class="fab fa-microsoft icon-green"></i> Excel to PDF</a>
-        <a href="#" class="tool-link"><i class="fab fa-microsoft icon-orange"></i> PowerPoint to PDF</a>
-        <a href="#" class="tool-link"><i class="fas fa-image icon-purple"></i> JPG to PDF</a>
-        <a href="#" class="tool-link"><i class="fas fa-drafting-compass icon-pink"></i> AutoCAD to PDF</a>
-        <a href="#" class="tool-link"><i class="fas fa-file-alt icon-cyan"></i> OpenOffice to PDF</a>
-        <a href="#" class="tool-link"><i class="fas fa-book icon-yellow"></i> eBooks to PDF</a>
-        <a href="#" class="tool-link"><i class="fab fa-apple icon-dark"></i> iWork to PDF</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#wordToPdfModal"><i class="fab fa-microsoft icon-blue"></i> Word to PDF</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#excelToPdfModal"><i class="fab fa-microsoft icon-green"></i> Excel to PDF</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#pptToPdfModal"><i class="fab fa-microsoft icon-orange"></i> PowerPoint to PDF</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#jpgToPdfModal"><i class="fas fa-image icon-purple"></i> JPG to PDF</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#cadToPdfModal"><i class="fas fa-drafting-compass icon-pink"></i> AutoCAD to PDF</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#openofficeToPdfModal"><i class="fas fa-file-alt icon-cyan"></i> OpenOffice to PDF</a>
+        <a href="#" class="tool-link ebook-tool-box" data-bs-toggle="modal" data-bs-target="#ebookToPdfModal"><i class="fas fa-book icon-yellow"></i> eBooks to PDF</a>
+        <a href="#" class="tool-link" id="iworkToPdfTrigger" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#iworkToPdfModal"><i class="fab fa-apple icon-dark"></i> iWork to PDF</a>
       </div>
 
       <!-- Convert from PDF -->
       <div class="col-md-3">
         <div class="tool-category">CONVERT FROM PDF</div>
-        <a href="#" class="tool-link"><i class="fas fa-file-word icon-blue"></i> PDF to Word</a>
-        <a href="#" class="tool-link"><i class="fas fa-file-excel icon-green"></i> PDF to Excel</a>
-        <a href="#" class="tool-link"><i class="fas fa-file-powerpoint icon-orange"></i> PDF to PowerPoint</a>
-        <a href="#" class="tool-link"><i class="fas fa-image icon-purple"></i> PDF to JPG</a>
-        <a href="#" class="tool-link"><i class="fas fa-image icon-pink"></i> PDF to PNG</a>
-        <a href="#" class="tool-link"><i class="fas fa-file-pdf icon-dark"></i> PDF to PDF/A</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#pdfToWordModal"><i class="fas fa-file-word icon-blue"></i> PDF to Word</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#pdfToExcelModal"><i class="fas fa-file-excel icon-green"></i> PDF to Excel</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#pdfToPptModal"><i class="fas fa-file-powerpoint icon-orange"></i> PDF to PowerPoint</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#pdfToJpgModal"><i class="fas fa-image icon-purple"></i> PDF to JPG</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#pdfToPngModal"><i class="fas fa-image icon-pink"></i> PDF to PNG</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#pdfToPdfaModal"><i class="fas fa-file-pdf icon-dark"></i> PDF to PDF/A</a>
       </div>
 
       <!-- Merge and Split -->
       <div class="col-md-3">
         <div class="tool-category">MERGE AND SPLIT</div>
-        <a href="#" class="tool-link"><i class="fas fa-file-import icon-orange"></i> Merge PDF</a>
-        <a href="#" class="tool-link"><i class="fas fa-columns icon-orange"></i> Split PDF</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#mergePDFModal"><i class="fas fa-file-import icon-orange"></i> Merge PDF</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#splitPDFModal"><i class="fas fa-columns icon-orange"></i> Split PDF</a>
       </div>
 
       <!-- PDF Security -->
       <div class="col-md-3">
         <div class="tool-category">PDF SECURITY</div>
-        <a href="#" class="tool-link"><i class="fas fa-lock icon-teal"></i> Protect PDF</a>
-        <a href="#" class="tool-link"><i class="fas fa-key icon-teal"></i> Unlock PDF</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#protectPDFModal"><i class="fas fa-lock icon-teal"></i> Protect PDF</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#unlockPDFModal"><i class="fas fa-key icon-teal" ></i> Unlock PDF</a>
       </div>
     </div>
   </div>
@@ -158,6 +158,7 @@
 
 
 <!-- Tool Conversion Modals -->
+
 <!-- Word to PDF Modal -->
 <div class="modal fade" id="wordToPdfModal" tabindex="-1" aria-labelledby="wordToPdfLabel" aria-hidden="true">
   <div class="modal-dialog">
@@ -171,7 +172,7 @@
           <input type="file" name="word_file" accept=".doc,.docx" class="form-control mb-3" required>
           <button type="submit" class="btn btn-success w-100">Convert</button>
         </div>
-    <!-- Inside modal-body, right after the submit button -->
+   
 <div id="loadingIndicator" class="text-center my-3" style="display: none;">
   <div class="spinner-border text-primary" role="status">
     <span class="visually-hidden">Converting...</span>
@@ -290,62 +291,37 @@
 
 <!-- AutoCAD to PDF Modal -->
 <div class="modal fade" id="cadToPdfModal" tabindex="-1" aria-labelledby="cadToPdfModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
-      <form id="cadToPdfForm">
-        <div class="modal-header">
-          <h5 class="modal-title" id="cadToPdfModalLabel">Convert AutoCAD to PDF</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <input type="file" name="cad_file" accept=".dwg,.dxf" class="form-control" required>
-          </div>
-          <div id="cadLoadingIndicator" class="text-center my-3" style="display: none;">
-            <div class="spinner-border text-pink" role="status">
-              <span class="visually-hidden">Converting...</span>
-            </div>
-            <p class="mt-2 text-pink">Converting... Please wait</p>
-          </div>
-          <div id="cadPreviewContainer" style="display: none;">
-            <iframe id="cadPdfPreview" width="100%" height="500px" frameborder="0"></iframe>
-            <a id="cadDownloadLink" class="btn btn-pink mt-3" style="background-color: #d63384; color: white;" download>Download PDF</a>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-pink" style="background-color: #d63384; color: white;">Convert</button>
-        </div>
-      </form>
+      <div class="modal-header">
+        <h5 class="modal-title" id="cadToPdfModalLabel">Convert AutoCAD to PDF</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center">
+        <p class="fs-5 text-muted">🚧 This feature is not yet implemented.<br><strong>Coming Soon!</strong></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
     </div>
   </div>
 </div>
 
+
 <!-- OpenOffice to PDF Modal -->
 <div class="modal fade" id="openofficeToPdfModal" tabindex="-1" aria-labelledby="openofficeToPdfModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
-      <form id="openofficeToPdfForm" enctype="multipart/form-data">
-        <div class="modal-header">
-          <h5 class="modal-title" id="openofficeToPdfModalLabel">Convert OpenOffice to PDF</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <input type="file" name="openoffice_file" accept=".odt,.ods,.odp" class="form-control mb-3" required>
-
-          <div id="openofficeLoadingIndicator" class="text-center my-3" style="display: none; color: #0dcaf0;">
-            <div class="spinner-border text-info" role="status"></div>
-            <p class="mt-2">Converting... Please wait</p>
-          </div>
-
-          <div id="openofficePreviewContainer" style="display: none;">
-            <iframe id="openofficePdfPreview" width="100%" height="500px"></iframe>
-            <a id="openofficeDownloadLink" class="btn btn-info mt-2" download>Download PDF</a>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-info">Convert</button>
-        </div>
-      </form>
+      <div class="modal-header">
+        <h5 class="modal-title" id="openofficeToPdfModalLabel">Convert OpenOffice to PDF</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center">
+        <p class="fs-5 text-muted">🚧 This feature is not yet implemented.<br><strong>Coming Soon!</strong></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
     </div>
   </div>
 </div>
@@ -441,14 +417,8 @@
           </div>
           <div id="pdfToPptResult" style="display: none;">
             <a id="downloadPptLink" class="btn btn-success mb-2" download>Download PowerPoint</a>
-            <a id="editPptLink" class="btn btn-primary mb-2" target="_blank"hidden>Edit PowerPoint</a>
           </div>
         </div>
-
-        <!-- <div id="pptSlidePreview" class="mt-3">
-        <h6>Slide Preview:</h6>
-        <div id="pptSlidesContainer" class="d-flex flex-wrap gap-2"></div>
-      </div> -->
 
         <div class="modal-footer">
           <button type="submit" class="btn btn-primary">Convert</button>
@@ -687,6 +657,50 @@
   </div>
 </div>
 
+<!-- eBooks to PDF Modal -->
+<div class="modal fade" id="ebookToPdfModal" tabindex="-1" aria-labelledby="ebookToPdfModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="ebookToPdfModalLabel">Convert eBook to PDF</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="upload-area p-4 border rounded mb-3 text-center">
+          <input type="file" id="ebookFileInput" accept=".epub,.mobi,.azw,.fb2" class="d-none">
+          <label for="ebookFileInput" class="btn btn-primary mb-3">
+            <i class="bi bi-upload"></i> Select eBook File
+          </label>
+          <p class="small text-muted">Supports .epub, .mobi, .azw, and .fb2 files</p>
+          <div id="ebookFileInfo" class="mt-2 d-none">
+            <p>Selected file: <span id="ebookFileName"></span></p>
+            <button id="convertEbookBtn" class="btn btn-warning mt-3">
+              <i class="bi bi-file-earmark-pdf"></i> Convert to PDF
+            </button>
+          </div>
+        </div>
+        <div id="ebookPreviewContainer" class="d-none">
+          <h6>PDF Preview</h6>
+          <div class="pdf-preview-container" style="max-height: 60vh; overflow: auto; border: 1px solid #ddd; background: #f8f9fa;">
+            <div id="ebookPdfViewer" class="text-center p-2"></div>
+          </div>
+          <div class="d-flex justify-content-between mt-3">
+            <button id="downloadEbookPdfBtn" class="btn btn-success">
+              <i class="bi bi-download"></i> Download PDF
+            </button>
+            <button id="convertAnotherEbookBtn" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-repeat"></i> Convert Another
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal for iWork to PDF conversion -->
 <div class="modal fade" id="iworkToPdfModal" tabindex="-1" aria-labelledby="iworkToPdfModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg">
@@ -729,7 +743,6 @@
     </div>
   </div>
 </div>
-
 
 
 <!-- PDF Tools JS -->

@@ -161,83 +161,6 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 
-// AutoCAD to PDF
-const cadForm = document.getElementById("cadToPdfForm");
-const cadPreviewContainer = document.getElementById("cadPreviewContainer");
-const cadLoadingIndicator = document.getElementById("cadLoadingIndicator");
-const cadPdfPreview = document.getElementById("cadPdfPreview");
-const cadDownloadLink = document.getElementById("cadDownloadLink");
-
-cadForm.addEventListener("submit", function (e) {
-  e.preventDefault();
-
-  cadPreviewContainer.style.display = "none";
-  cadLoadingIndicator.style.display = "block";
-
-  const formData = new FormData(cadForm);
-
-  fetch("http://127.0.0.1:5000/convert-cad-to-pdf", {
-    method: "POST",
-    body: formData,
-  })
-    .then(response => {
-      if (!response.ok) throw new Error("Failed to convert AutoCAD file.");
-      return response.json();
-    })
-    .then(data => {
-      const pdfUrl = "http://127.0.0.1:5000/" + data.pdf_path;
-      cadPdfPreview.src = pdfUrl;
-      cadDownloadLink.href = pdfUrl;
-      cadDownloadLink.download = "converted_cad.pdf";
-
-      cadLoadingIndicator.style.display = "none";
-      cadPreviewContainer.style.display = "block";
-
-      cadForm.reset();
-    })
-    .catch(error => {
-      cadLoadingIndicator.style.display = "none";
-      alert("Error: " + error.message);
-    });
-});
-
-// OpenOffice to PDF
-const openofficeForm = document.getElementById("openofficeToPdfForm");
-const openofficeLoadingIndicator = document.getElementById("openofficeLoadingIndicator");
-const openofficePreviewContainer = document.getElementById("openofficePreviewContainer");
-const openofficePdfPreview = document.getElementById("openofficePdfPreview");
-const openofficeDownloadLink = document.getElementById("openofficeDownloadLink");
-
-openofficeForm.addEventListener("submit", function (e) {
-  e.preventDefault();
-  openofficePreviewContainer.style.display = "none";
-  openofficeLoadingIndicator.style.display = "block";
-
-  const formData = new FormData(openofficeForm);
-
-  fetch("http://127.0.0.1:5000/convert-openoffice-to-pdf", {
-    method: "POST",
-    body: formData
-  })
-    .then(response => response.json())
-    .then(data => {
-      if (data.error) throw new Error(data.error);
-
-      const pdfUrl = "http://127.0.0.1:5000/" + data.pdf_path;
-      openofficePdfPreview.src = pdfUrl;
-      openofficeDownloadLink.href = pdfUrl;
-      openofficeDownloadLink.download = "converted_openoffice.pdf";
-
-      openofficeLoadingIndicator.style.display = "none";
-      openofficePreviewContainer.style.display = "block";
-      openofficeForm.reset();
-    })
-    .catch(error => {
-      openofficeLoadingIndicator.style.display = "none";
-      alert("Error: " + error.message);
-    });
-});
-
 // PDF To Word
 document.getElementById("pdfToWordForm").addEventListener("submit", function (e) {
   e.preventDefault();
@@ -369,13 +292,9 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
   const loading = document.getElementById("pdfToPptLoading");
   const result = document.getElementById("pdfToPptResult");
   const downloadLink = document.getElementById("downloadPptLink");
-  const editLink = document.getElementById("editPptLink");
-  const previewContainer = document.getElementById("pptSlidesContainer");
 
   loading.style.display = "block";
   result.style.display = "none";
-  editLink.hidden = true;
-  if (previewContainer) previewContainer.innerHTML = "";
 
   const formData = new FormData(form);
 
@@ -393,30 +312,8 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
       }
 
       const pptPath = `http://127.0.0.1:5000/download/${data.ppt_filename}`;
-      const editorUrl = `http://127.0.0.1:5000/ppt-editor/${data.ppt_filename}`;
-
       downloadLink.href = pptPath;
-      editLink.href = editorUrl;
-      editLink.hidden = false;
-
       result.style.display = "block";
-
-      // Fetch and render slide previews
-      fetch(`http://127.0.0.1:5000/get-slide-images/${data.ppt_filename}`)
-        .then(res => res.json())
-        .then(images => {
-          if (previewContainer) {
-            previewContainer.innerHTML = "";
-            images.forEach(src => {
-              const img = document.createElement("img");
-              img.src = src;
-              img.style.maxWidth = "200px";
-              img.classList.add("img-thumbnail", "me-2", "mb-2");
-              previewContainer.appendChild(img);
-            });
-          }
-        });
-
       form.reset();
     })
     .catch(err => {
@@ -424,6 +321,7 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
       alert("Conversion failed: " + err.message);
     });
 });
+
 
 // PDF to JPG
  document.getElementById("pdfToJpgForm").addEventListener("submit", function (e) {
@@ -544,7 +442,6 @@ document.getElementById("pdfToPdfaForm").addEventListener("submit", function(e) 
 
   const formData = new FormData(form);
 
-  // Make sure this points to your Flask server (port 5000)
   fetch("http://localhost:5000/convert-to-pdfa", {
     method: "POST",
     body: formData,
@@ -555,7 +452,7 @@ document.getElementById("pdfToPdfaForm").addEventListener("submit", function(e) 
   .then(async response => {
     const contentType = response.headers.get('content-type');
     
-    // First try to parse as JSON
+    // Parse as JSON
     if (contentType && contentType.includes('application/json')) {
       const data = await response.json();
       if (!response.ok) {
@@ -646,7 +543,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             // Create a fresh iframe
             const iframeContainer = pdfPreviewContainer.querySelector('.ratio');
-            iframeContainer.innerHTML = ''; // Clear previous iframe
+            iframeContainer.innerHTML = ''; 
             
             const newIframe = document.createElement("iframe");
             newIframe.id = "pdfPreview";
@@ -708,7 +605,7 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // Protect PDF
-const backendBaseURL = "http://127.0.0.1:5000"; // Base URL of Flask backend
+const backendBaseURL = "http://127.0.0.1:5000"; 
 
 document.getElementById("protectPDFForm").addEventListener("submit", function (e) {
   e.preventDefault();
@@ -866,7 +763,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const formData = new FormData();
       formData.append('file', currentFile);
 
-      // Step 1: Convert the file
+      // Convert the file
       const conversionResponse = await fetch(`${BACKEND_URL}/convert-iwork-to-pdf`, {
         method: 'POST',
         body: formData
@@ -877,19 +774,18 @@ document.addEventListener('DOMContentLoaded', function() {
       const result = await conversionResponse.json();
       if (!result.success) throw new Error(result.message || 'Conversion failed');
       
-      // Step 2: Get the PDF as blob
+      // Get the PDF as blob
       const pdfResponse = await fetch(`${BACKEND_URL}${result.pdfUrl}`);
       pdfBlob = await pdfResponse.blob();
       
-      // Step 3: Display PDF using PDF.js
+      // Display PDF using PDF.js
       const pdfObjectUrl = URL.createObjectURL(pdfBlob);
       
-      // Show the display area immediately
+      // Show the display area 
       pdfDisplayArea.classList.remove('d-none');
       fileInfo.classList.add('d-none');
       
       // Render PDF using PDF.js
-     // Inside your convertBtn click handler, replace the PDF rendering part with:
 const loadingTask = pdfjsLib.getDocument(pdfObjectUrl);
 loadingTask.promise.then(function(pdf) {
   const viewer = document.getElementById('pdfViewer');
@@ -897,13 +793,13 @@ loadingTask.promise.then(function(pdf) {
   
   // Get the container dimensions
   const container = viewer.parentElement;
-  const containerWidth = container.clientWidth - 30; // Account for padding
+  const containerWidth = container.clientWidth - 30; 
   
   // Show first page
   pdf.getPage(1).then(function(page) {
     // Calculate scale to fit container width
     const viewport = page.getViewport({ scale: 1.0 });
-    const scale = (containerWidth - 20) / viewport.width; // -20 for some margin
+    const scale = (containerWidth - 20) / viewport.width; 
     const scaledViewport = page.getViewport({ scale: scale });
     
     const canvas = document.createElement('canvas');
@@ -953,4 +849,184 @@ loadingTask.promise.then(function(pdf) {
 
   // Convert another handler
   convertAnotherBtn.addEventListener('click', resetConversionUI);
+});
+
+
+// eBooks to PDF
+document.addEventListener('DOMContentLoaded', function() {
+  const BACKEND_URL = 'http://localhost:5000';
+  const ebookTool = document.querySelector('.ebook-tool-box');
+  const ebookFileInput = document.getElementById('ebookFileInput');
+  const ebookFileInfo = document.getElementById('ebookFileInfo');
+  const ebookFileName = document.getElementById('ebookFileName');
+  const convertEbookBtn = document.getElementById('convertEbookBtn');
+  const ebookPreviewContainer = document.getElementById('ebookPreviewContainer');
+  const downloadEbookPdfBtn = document.getElementById('downloadEbookPdfBtn');
+  const convertAnotherEbookBtn = document.getElementById('convertAnotherEbookBtn');
+
+  let currentEbookFile = null;
+  let ebookPdfBlob = null;
+
+  // Initialize modal
+  const ebookModal = new bootstrap.Modal(document.getElementById('ebookToPdfModal'));
+  
+  // Clean up when modal hides
+  ebookModal._element.addEventListener('hidden.bs.modal', function() {
+    resetEbookConversionUI();
+    // Clear any remaining backdrop
+    const backdrops = document.querySelectorAll('.modal-backdrop');
+    backdrops.forEach(backdrop => backdrop.remove());
+    // Reset body class
+    document.body.classList.remove('modal-open');
+  });
+
+  // Update click handler
+  ebookTool.addEventListener('click', function(e) {
+    e.preventDefault();
+    ebookModal.show();
+  });
+
+  ebookTool.addEventListener('click', function(e) {
+    e.preventDefault();
+    const modal = new bootstrap.Modal(document.getElementById('ebookToPdfModal'));
+    modal.show();
+    resetEbookConversionUI();
+  });
+
+  function resetEbookConversionUI() {
+    ebookFileInput.value = '';
+    currentEbookFile = null;
+    ebookPdfBlob = null;
+    ebookFileInfo.classList.add('d-none');
+    ebookPreviewContainer.classList.add('d-none');
+    document.getElementById('ebookPdfViewer').innerHTML = '';
+    convertEbookBtn.disabled = false;
+    convertEbookBtn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Convert to PDF';
+  }
+
+  ebookFileInput.addEventListener('change', function(e) {
+    if (e.target.files.length > 0) {
+      currentEbookFile = e.target.files[0];
+      ebookFileName.textContent = currentEbookFile.name;
+      ebookFileInfo.classList.remove('d-none');
+      ebookPreviewContainer.classList.add('d-none');
+    }
+  });
+
+  convertEbookBtn.addEventListener('click', async function() {
+    if (!currentEbookFile) {
+      showAlert('Please select an eBook file first', 'warning');
+      return;
+    }
+
+    convertEbookBtn.disabled = true;
+    convertEbookBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Converting...';
+
+    try {
+      const formData = new FormData();
+      formData.append('file', currentEbookFile);
+
+      const conversionResponse = await fetch(`${BACKEND_URL}/convert-ebook-to-pdf`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await conversionResponse.json();
+
+      if (!conversionResponse.ok || !result.success) {
+        throw new Error(result.message || 'Conversion failed with unknown error');
+      }
+
+      const pdfResponse = await fetch(`${BACKEND_URL}${result.pdfUrl}`);
+      if (!pdfResponse.ok) {
+        throw new Error('Failed to fetch the converted PDF');
+      }
+
+      ebookPdfBlob = await pdfResponse.blob();
+      const pdfObjectUrl = URL.createObjectURL(ebookPdfBlob);
+
+      ebookPreviewContainer.classList.remove('d-none');
+      ebookFileInfo.classList.add('d-none');
+
+      await renderPdfPreview(pdfObjectUrl);
+
+      downloadEbookPdfBtn.onclick = createDownloadHandler(pdfObjectUrl);
+
+    } catch (error) {
+      console.error('Conversion error:', error);
+      showAlert(error.message, 'danger');
+      resetEbookConversionUI();
+    } finally {
+      convertEbookBtn.disabled = false;
+      convertEbookBtn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Convert to PDF';
+    }
+  });
+
+async function renderPdfPreview(pdfUrl) {
+    try {
+        // Load PDF.js with matching versions
+        const PDFJS_VERSION = '2.12.313'; 
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
+        
+        const loadingTask = pdfjsLib.getDocument({
+            url: pdfUrl,
+            cMapUrl: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/cmaps/`,
+            cMapPacked: true
+        });
+
+        const pdf = await loadingTask.promise;
+        const viewer = document.getElementById('ebookPdfViewer');
+        viewer.innerHTML = '';
+
+        const container = viewer.parentElement;
+        const containerWidth = container.clientWidth - 40;
+
+        // Get first page
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.0 });
+        const scale = containerWidth / viewport.width;
+        const scaledViewport = page.getViewport({ scale: scale });
+
+        // Create canvas for rendering
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = scaledViewport.height;
+        canvas.width = scaledViewport.width;
+        canvas.classList.add('img-fluid', 'mb-2', 'shadow-sm');
+        canvas.style.maxWidth = '100%';
+        canvas.style.height = 'auto';
+
+        viewer.appendChild(canvas);
+
+        // Render PDF page
+        await page.render({
+            canvasContext: context,
+            viewport: scaledViewport
+        }).promise;
+
+    } catch (error) {
+        console.error('PDF preview error:', error);
+        document.getElementById('ebookPdfViewer').innerHTML = `
+            <div class="alert alert-warning">
+                PDF preview could not be displayed, but you can still download the file.
+                <p class="mt-2 small">${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+  function createDownloadHandler(pdfObjectUrl) {
+    return function() {
+      const a = document.createElement('a');
+      a.href = pdfObjectUrl;
+      a.download = currentEbookFile.name.replace(/\.[^.]+$/, '') + '.pdf';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+      }, 100);
+    };
+  }
+
+  convertAnotherEbookBtn.addEventListener('click', resetEbookConversionUI);
 });

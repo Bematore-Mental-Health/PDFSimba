@@ -40,8 +40,6 @@ from word_to_pdf import convert_word_file
 from excel_to_pdf import convert_excel_file
 from powerpoint_to_pdf import convert_ppt_file
 from jpg_to_pdf import convert_jpg_file
-from cad_to_pdf import convert_cad_file
-from openoffice_to_pdf import convert_openoffice_file  
 from pdf_to_word import convert_pdf_file
 from pdf_to_excel import convert_pdf_to_excel
 from pdf_to_ppt import convert_pdf_to_ppt 
@@ -69,6 +67,7 @@ app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
 app.config['ALLOWED_IWORK_EXTENSIONS'] = {'pages', 'key', 'numbers'}
 
 
+
 # Word to PDF
 @app.route('/convert-word-to-pdf', methods=['POST'])
 def convert_word_route():
@@ -92,17 +91,6 @@ def convert_ppt_route():
 def convert_jpg_route():
     return convert_jpg_file()
 
-# AutoCAD to PDF
-@app.route('/convert-cad-to-pdf', methods=['POST'])
-def convert_cad_route():
-    file = request.files.get('cad_file')
-    return convert_cad_file(file)
-
-# OpenOffice to PDF (ODT, ODS, ODP)
-@app.route('/convert-openoffice-to-pdf', methods=['POST'])
-def convert_openoffice_route():
-    file = request.files.get('openoffice_file')
-    return convert_openoffice_file(file)
 
 # Serve converted PDF files
 @app.route('/converted/<path:filename>')
@@ -290,41 +278,41 @@ def convert_pdf_to_ppt_route():
         return jsonify({'error': error}), 400
     return jsonify({'ppt_filename': ppt_filename})
 
-@app.route('/ppt-editor/<filename>')
-def ppt_editor(filename):
-    return render_template('ppt_editor.html', filename=filename)
-
-
 @app.route('/download/<filename>')
 def download_file(filename):
     return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
 
-from io import BytesIO
-import base64
-from pptx import Presentation
-from PIL import Image
-import tempfile
+def convert_pdf_to_ppt(file):
+    if not file:
+        return None, "No file uploaded."
 
-@app.route('/get-slide-images/<filename>')
-def get_slide_images(filename):
-    ppt_path = os.path.join(OUTPUT_FOLDER, filename)
-    if not os.path.exists(ppt_path):
-        return jsonify({'error': 'File not found'}), 404
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext != '.pdf':
+        return None, "Only PDF files are supported."
 
-    prs = Presentation(ppt_path)
-    slide_imgs = []
+    filename = f"{uuid.uuid4()}.pdf"
+    input_path = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(input_path)
 
-    for i, slide in enumerate(prs.slides):
-        # Create a blank white image
-        width = prs.slide_width // 9525  # convert EMUs to pixels (approx)
-        height = prs.slide_height // 9525
-        img = Image.new('RGB', (width, height), 'white')
-        buffer = BytesIO()
-        img.save(buffer, format="PNG")
-        base64_img = base64.b64encode(buffer.getvalue()).decode('utf-8')
-        slide_imgs.append(f"data:image/png;base64,{base64_img}")
+    output_filename = f"{os.path.splitext(filename)[0]}.pptx"
+    output_path = os.path.join(OUTPUT_FOLDER, output_filename)
 
-    return jsonify(slide_imgs)
+    try:
+        images = convert_from_path(input_path)
+        prs = Presentation()
+        blank_slide_layout = prs.slide_layouts[6]  
+
+        for image in images:
+            slide = prs.slides.add_slide(blank_slide_layout)
+            image_path = os.path.join(UPLOAD_FOLDER, f"temp_{uuid.uuid4()}.jpg")
+            image.save(image_path, "JPEG")
+            slide.shapes.add_picture(image_path, Inches(0), Inches(0), width=prs.slide_width)
+            os.remove(image_path)
+
+        prs.save(output_path)
+        return output_filename, None
+    except Exception as e:
+        return None, str(e)
 
 
 # PDF to JPG 
@@ -423,7 +411,7 @@ def convert_pdf_to_pdfa():
             return jsonify({'error': 'No file uploaded'}), 400
             
         file = request.files['pdf_file']
-        pdfa_version = request.form.get('pdfa_version', '1B')  # Default to PDF/A-1b
+        pdfa_version = request.form.get('pdfa_version', '1B') 
         
         if file.filename == '':
             return jsonify({'error': 'No selected file'}), 400
@@ -522,7 +510,7 @@ def download_merged_pdf(filename):
         response = make_response(send_file(
             file_path,
             mimetype='application/pdf',
-            as_attachment=False,  # Crucial for preview
+            as_attachment=False, 
             download_name=filename
         ))
         
@@ -546,7 +534,7 @@ def upload_pdf():
         return jsonify({'error': 'No file uploaded'}), 400
 
     try:
-        # Create a unique filename - preserve original filename exactly
+        # Create a unique filename 
         original_filename = secure_filename(file.filename)  
         filename = f"{uuid.uuid4()}_{original_filename}"
         file_path = os.path.join(UPLOAD_FOLDER, filename)
@@ -834,6 +822,123 @@ def serve_iwork_pdf(filename):
     except Exception as e:
         print(f"Error serving PDF: {str(e)}")
         return jsonify({'success': False, 'message': 'Error serving PDF'}), 500
+
+
+# eBook to PDF 
+def allowed_ebook_file(filename):
+    ALLOWED_EBOOK_EXTENSIONS = {'epub', 'mobi', 'azw', 'fb2'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EBOOK_EXTENSIONS
+
+@app.route('/convert-ebook-to-pdf', methods=['POST'])
+def handle_ebook_conversion():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': 'No file uploaded'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'message': 'No selected file'}), 400
+
+    if not allowed_ebook_file(file.filename):
+        return jsonify({'success': False, 'message': 'Invalid file type. Supported formats: EPUB, MOBI, AZW, FB2'}), 400
+
+    try:
+        filename = secure_filename(file.filename)
+        unique_id = uuid.uuid4().hex
+        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
+        output_filename = f"{os.path.splitext(filename)[0]}.pdf"
+        output_path = os.path.join(app.config['OUTPUT_FOLDER'], f"{unique_id}_{output_filename}")
+
+        # Create directories if they don't exist
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
+
+        # Save the uploaded file
+        file.save(upload_path)
+
+        # Verify file is not empty
+        if os.path.getsize(upload_path) == 0:
+            os.remove(upload_path)
+            return jsonify({'success': False, 'message': 'Uploaded file is empty'}), 400
+
+        # Standard conversion command that works for all formats
+        cmd = [
+            'ebook-convert',
+            upload_path,
+            output_path,
+            '--embed-all-fonts',
+            '--enable-heuristics',
+            '--pdf-page-margin-left', '20',
+            '--pdf-page-margin-right', '20',
+            '--pdf-page-margin-top', '20',
+            '--pdf-page-margin-bottom', '20',
+            '--output-profile', 'tablet'  
+        ]
+
+        try:
+            print(f"Executing command: {' '.join(cmd)}")
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                errors='replace'
+            )
+            
+            print("Conversion stdout:", result.stdout)
+            print("Conversion stderr:", result.stderr)
+            
+            if result.returncode != 0:
+                error_msg = result.stderr if result.stderr else "Conversion failed"
+                return jsonify({
+                    'success': False,
+                    'message': f'Conversion failed: {error_msg}'
+                }), 500
+
+            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                return jsonify({
+                    'success': False,
+                    'message': 'Conversion completed but output file is empty'
+                }), 500
+
+            pdf_url = f"/ebook-outputs/{unique_id}_{output_filename}"
+            return jsonify({
+                'success': True,
+                'pdfUrl': pdf_url,
+                'filename': output_filename
+            })
+
+        except Exception as e:
+            print(f"Conversion error: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'Conversion failed: {str(e)}'
+            }), 500
+
+    except Exception as e:
+        print(f"Server error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }), 500
+    finally:
+        if 'upload_path' in locals() and os.path.exists(upload_path):
+            try:
+                os.remove(upload_path)
+            except Exception as e:
+                print(f"Error cleaning up file: {str(e)}")
+
+@app.route('/ebook-outputs/<path:filename>')
+def serve_ebook_pdf(filename):
+    """Serve converted eBook PDF files from the output directory"""
+    try:
+        return send_from_directory(
+            app.config['OUTPUT_FOLDER'],
+            filename, 
+            as_attachment=False,
+            mimetype='application/pdf'
+        )
+    except FileNotFoundError:
+        return jsonify({'success': False, 'message': 'PDF file not found'}), 404
 
 
 
