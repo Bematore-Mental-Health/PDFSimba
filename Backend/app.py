@@ -53,6 +53,7 @@ from split_pdfs import  split_pdf_logic
 
 
 app = Flask(__name__)
+application = app
 CORS(app)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -962,6 +963,81 @@ def cleanup_old_files(folder_paths, max_age_minutes=30, check_interval_seconds=6
 
     thread = threading.Thread(target=run_cleanup, daemon=True)
     thread.start()
+
+# Default route to display welcome page
+@app.route('/')
+def welcome():
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>PDFSimba Backend</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                text-align: center;
+            }
+            h1 {
+                color: #2c3e50;
+                font-size: 2.5em;
+                margin-bottom: 10px;
+            }
+            .logo {
+                margin-bottom: 20px;
+                font-size: 5em;
+            }
+            .status {
+                background-color: #f1f8e9;
+                border-left: 5px solid #7cb342;
+                padding: 15px;
+                margin-bottom: 20px;
+                text-align: left;
+            }
+            .endpoints {
+                background-color: #e8f4fd;
+                border-left: 5px solid #2196F3;
+                padding: 15px;
+                text-align: left;
+            }
+            .endpoint {
+                margin-bottom: 10px;
+                font-family: monospace;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="logo">ðŸ“„âœ¨</div>
+        <h1>Welcome to PDFSimba Backend</h1>
+        <p>The PDF conversion service is running successfully.</p>
+        
+        <div class="status">
+            <h2>Server Status</h2>
+            <p>The backend server is online and ready to process requests.</p>
+        </div>
+        
+        <div class="endpoints">
+            <h2>Available Endpoints</h2>
+            <div class="endpoint">/convert-word-to-pdf</div>
+            <div class="endpoint">/convert-excel-to-pdf</div>
+            <div class="endpoint">/convert-ppt-to-pdf</div>
+            <div class="endpoint">/convert-jpg-to-pdf</div>
+            <div class="endpoint">/convert-pdf-to-word</div>
+            <div class="endpoint">/convert-pdf-to-excel</div>
+            <div class="endpoint">/convert-pdf-to-ppt</div>
+            <div class="endpoint">/convert-pdf-to-jpg</div>
+            <div class="endpoint">/convert-pdf-to-png</div>
+            <p>And many more...</p>
+        </div>
+        
+        <p>This is a backend service. Please use the frontend application to interact with these services.</p>
+    </body>
+    </html>
+    """
 
 # Run server
 if __name__ == '__main__':

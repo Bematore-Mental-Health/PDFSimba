@@ -1,3 +1,6 @@
+// Global backend URL - change this when deploying to production
+// const BACKEND_URL = 'https://server.pdfsimba.com';
+const BACKEND_URL = 'http://localhost:5000';
 document.addEventListener("DOMContentLoaded", function () {
   // Word to PDF
   const form = document.getElementById("wordToPdfForm");
@@ -6,6 +9,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const pdfPreview = document.getElementById("pdfPreview");
   const downloadLink = document.getElementById("downloadLink");
 
+  
   form.addEventListener("submit", function (e) {
     e.preventDefault();
 
@@ -14,7 +18,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const formData = new FormData(form);
 
-    fetch("http://127.0.0.1:5000/convert-word-to-pdf", {
+    fetch(`${BACKEND_URL}/convert-word-to-pdf`, {
       method: "POST",
       body: formData,
     })
@@ -23,7 +27,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return response.json();
     })
     .then(data => {
-      const pdfUrl = "http://127.0.0.1:5000/" + data.pdf_path;
+      const pdfUrl = `${BACKEND_URL}/` + data.pdf_path;
 
       pdfPreview.src = pdfUrl;
       downloadLink.href = pdfUrl;
@@ -55,7 +59,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const formData = new FormData(excelForm);
 
-    fetch("http://127.0.0.1:5000/convert-excel-to-pdf", {
+    fetch(`${BACKEND_URL}/convert-excel-to-pdf`, {
       method: "POST",
       body: formData,
     })
@@ -64,7 +68,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return response.json();
     })
     .then(data => {
-      const pdfUrl = "http://127.0.0.1:5000/" + data.pdf_path;
+      const pdfUrl = `${BACKEND_URL}/` + data.pdf_path;
       excelPdfPreview.src = pdfUrl;
       excelDownloadLink.href = pdfUrl;
       excelDownloadLink.download = "converted_excel.pdf";
@@ -95,7 +99,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const formData = new FormData(pptForm);
 
-    fetch("http://127.0.0.1:5000/convert-ppt-to-pdf", {
+    fetch(`${BACKEND_URL}/convert-ppt-to-pdf`, {
       method: "POST",
       body: formData,
     })
@@ -104,7 +108,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return response.json();
     })
     .then(data => {
-      const pdfUrl = "http://127.0.0.1:5000/" + data.pdf_path;
+      const pdfUrl = `${BACKEND_URL}/` + data.pdf_path;
       pptPdfPreview.src = pdfUrl;
       pptDownloadLink.href = pdfUrl;
       pptDownloadLink.download = "converted_ppt.pdf";
@@ -135,7 +139,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const formData = new FormData(jpgForm);
 
-    fetch("http://127.0.0.1:5000/convert-jpg-to-pdf", {
+    fetch(`${BACKEND_URL}/convert-jpg-to-pdf`, {
       method: "POST",
       body: formData,
     })
@@ -144,7 +148,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return response.json();
     })
     .then(data => {
-      const pdfUrl = "http://127.0.0.1:5000/" + data.pdf_path;
+      const pdfUrl = `${BACKEND_URL}/` + data.pdf_path;
       jpgPdfPreview.src = pdfUrl;
       jpgDownloadLink.href = pdfUrl;
       jpgDownloadLink.download = "converted_jpg.pdf";
@@ -181,7 +185,7 @@ document.getElementById("pdfToWordForm").addEventListener("submit", function (e)
 
   const formData = new FormData(form);
 
-  fetch("http://127.0.0.1:5000/convert-pdf-to-word", {
+  fetch(`${BACKEND_URL}/convert-pdf-to-word`, {
     method: "POST",
     body: formData,
   })
@@ -194,9 +198,9 @@ document.getElementById("pdfToWordForm").addEventListener("submit", function (e)
         return;
       }
 
-      const htmlPath = "http://127.0.0.1:5000/" + data.word_path;
-      const docxPath = "http://127.0.0.1:5000/" + data.word_docx_path;
-      const editorUrl = "http://127.0.0.1:5000/editor/" + data.word_filename;
+      const htmlPath = `${BACKEND_URL}/` + data.word_path;
+      const docxPath = `${BACKEND_URL}/` + data.word_docx_path;
+      const editorUrl = `${BACKEND_URL}/editor/` + data.word_filename;
 
       // Set download and edit links
       downloadLink.href = docxPath;
@@ -243,7 +247,7 @@ document.getElementById("pdfToExcelForm").addEventListener("submit", function (e
 
   const formData = new FormData(form);
 
-  fetch("http://127.0.0.1:5000/convert-pdf-to-excel", {
+  fetch(`${BACKEND_URL}/convert-pdf-to-excel`, {
     method: "POST",
     body: formData,
   })
@@ -256,14 +260,14 @@ document.getElementById("pdfToExcelForm").addEventListener("submit", function (e
         return;
       }
 
-      const excelPath = `http://127.0.0.1:5000/download/${data.excel_filename}`;
-      const editorUrl = `http://127.0.0.1:5000/excel-editor/${data.excel_filename}`;
+      const excelPath = `${BACKEND_URL}/download/${data.excel_filename}`;
+      const editorUrl = `${BACKEND_URL}/excel-editor/${data.excel_filename}`;
 
       downloadLink.href = excelPath;
       editLink.href = editorUrl;
 
       // Basic preview
-      fetch(`http://127.0.0.1:5000/converted/${data.excel_filename}`)
+      fetch(`${BACKEND_URL}/converted/${data.excel_filename}`)
         .then(res => res.arrayBuffer())
         .then(buffer => {
           const data = new Uint8Array(buffer);
@@ -298,7 +302,7 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
 
   const formData = new FormData(form);
 
-  fetch("http://127.0.0.1:5000/convert-pdf-to-ppt", {
+  fetch(`${BACKEND_URL}/convert-pdf-to-ppt`, {
     method: "POST",
     body: formData,
   })
@@ -311,7 +315,7 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
         return;
       }
 
-      const pptPath = `http://127.0.0.1:5000/download/${data.ppt_filename}`;
+      const pptPath = `${BACKEND_URL}/download/${data.ppt_filename}`;
       downloadLink.href = pptPath;
       result.style.display = "block";
       form.reset();
@@ -340,7 +344,7 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
 
     const formData = new FormData(form);
 
-    fetch("http://127.0.0.1:5000/convert-pdf-to-jpg", {
+    fetch(`${BACKEND_URL}/convert-pdf-to-jpg`, {
       method: "POST",
       body: formData,
     })
@@ -353,12 +357,12 @@ document.getElementById("pdfToPptForm").addEventListener("submit", function (e) 
           return;
         }
 
-        const zipPath = `http://127.0.0.1:5000${data.zipUrl}`;
+        const zipPath = `${BACKEND_URL}${data.zipUrl}`;
         downloadLink.href = zipPath;
 
         data.imageUrls.forEach((url) => {
           const img = document.createElement("img");
-          img.src = `http://127.0.0.1:5000${url}`;
+          img.src = `${BACKEND_URL}${url}`;
           img.className = "img-thumbnail";
           img.style.maxWidth = "150px";
           img.style.maxHeight = "150px";
@@ -392,7 +396,7 @@ document.getElementById("pdfToPngForm").addEventListener("submit", function (e) 
 
   const formData = new FormData(form);
 
-  fetch("http://127.0.0.1:5000/convert-pdf-to-png", {
+  fetch(`${BACKEND_URL}/convert-pdf-to-png`, {
     method: "POST",
     body: formData,
   })
@@ -405,12 +409,12 @@ document.getElementById("pdfToPngForm").addEventListener("submit", function (e) 
         return;
       }
 
-      const zipPath = `http://127.0.0.1:5000${data.zipUrl}`;
+      const zipPath = `${BACKEND_URL}${data.zipUrl}`;
       downloadLink.href = zipPath;
 
       data.imageUrls.forEach((url) => {
         const img = document.createElement("img");
-        img.src = `http://127.0.0.1:5000${url}`;
+        img.src = `${BACKEND_URL}${url}`;
         img.className = "img-thumbnail";
         img.style.maxWidth = "150px";
         img.style.maxHeight = "150px";
@@ -442,7 +446,7 @@ document.getElementById("pdfToPdfaForm").addEventListener("submit", function(e) 
 
   const formData = new FormData(form);
 
-  fetch("http://localhost:5000/convert-to-pdfa", {
+  fetch(`${BACKEND_URL}/convert-to-pdfa`, {
     method: "POST",
     body: formData,
     headers: {
@@ -525,7 +529,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const formData = new FormData(form);
 
-        fetch("http://127.0.0.1:5000/merge-pdfs", {
+        fetch(`${BACKEND_URL}/merge-pdfs`, {
             method: "POST",
             body: formData,
             headers: {
@@ -552,7 +556,7 @@ document.addEventListener("DOMContentLoaded", function () {
             newIframe.style.border = "none";
             
             // Set the source with cache-busting parameter
-            const pdfUrl = `http://127.0.0.1:5000${data.pdf_path}?t=${Date.now()}`;
+            const pdfUrl = `${BACKEND_URL}${data.pdf_path}?t=${Date.now()}`;
             newIframe.src = pdfUrl;
             iframeContainer.appendChild(newIframe);
 
@@ -584,7 +588,7 @@ document.addEventListener("DOMContentLoaded", function () {
         e.preventDefault();
 
         const formData = new FormData(form);
-        fetch("http://127.0.0.1:5000/upload-pdf", {
+        fetch(`${BACKEND_URL}/upload-pdf`, {
             method: "POST",
             body: formData,
         })
@@ -594,7 +598,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             // Encode the filename for URL
             const encodedFilename = encodeURIComponent(data.file_path);
-            const editorUrl = `http://127.0.0.1:5000/split-editor?file=${encodedFilename}`;
+            const editorUrl = `${BACKEND_URL}/split-editor?file=${encodedFilename}`;
             window.open(editorUrl, "_blank");
         })
         .catch(error => {
@@ -605,7 +609,7 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // Protect PDF
-const backendBaseURL = "http://127.0.0.1:5000"; 
+// Use the global BACKEND_URL
 
 document.getElementById("protectPDFForm").addEventListener("submit", function (e) {
   e.preventDefault();
@@ -621,7 +625,7 @@ document.getElementById("protectPDFForm").addEventListener("submit", function (e
 
   const formData = new FormData(form);
 
-  fetch(`${backendBaseURL}/protect-pdf`, {
+  fetch(`${BACKEND_URL}/protect-pdf`, {
     method: "POST",
     body: formData,
     headers: {
@@ -673,7 +677,7 @@ document.getElementById("unlockPDFForm").addEventListener("submit", function(e) 
 
   const formData = new FormData(form);
 
-  fetch("http://localhost:5000/unlock-pdf", {
+  fetch(`${BACKEND_URL}/unlock-pdf`, {
     method: "POST",
     body: formData,
     headers: {
@@ -866,6 +870,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   let currentEbookFile = null;
   let ebookPdfBlob = null;
+
 
   // Initialize modal
   const ebookModal = new bootstrap.Modal(document.getElementById('ebookToPdfModal'));

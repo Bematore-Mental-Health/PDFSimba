@@ -62,7 +62,7 @@
 
       <!-- Image -->
       <div class="col-lg-6 text-center position-relative">
-        <img src="./Media/b1.png" alt="Hero" class="hero-img img-fluid">
+        <img src="./Media/bi4.png" alt="Hero" class="hero-img img-fluid">
         <div class="icon-badge"><i class="fa-solid fa-lightbulb"></i></div>
       </div>
     </div>
