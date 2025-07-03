@@ -1035,3 +1035,62 @@ async function renderPdfPreview(pdfUrl) {
 
   convertAnotherEbookBtn.addEventListener('click', resetEbookConversionUI);
 });
+
+
+// Sign Document
+document.getElementById("signingDocumentForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const formData = new FormData(form);
+
+    fetch(`${BACKEND_URL}/upload-signing-document`, {
+        method: "POST",
+        body: formData,
+    })
+    .then((res) => {
+        if (!res.ok) {
+            return res.text().then(text => { throw new Error(text) });
+        }
+        return res.json();
+    })
+    .then((data) => {
+        if (data.error) {
+            alert("Error: " + data.error);
+            return;
+        }
+
+        // Redirect to the signing page
+        window.location.href = data.redirect_url;
+    })
+    .catch((err) => {
+        alert("Failed to upload document: " + err.message);
+    });
+});
+
+  // Edit PDF 
+  document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+    e.preventDefault(); // Prevent default form submission
+
+    const form = e.target;
+    const formData = new FormData(form);
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/upload-pdf-document`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // Redirect to the editor in a new tab
+        const editorUrl = `${BACKEND_URL}/pdf-document-editor?file=${encodeURIComponent(result.fileUrl)}`;
+        window.open(editorUrl, "_blank");
+      } else {
+        alert(result.error || "Failed to upload the PDF");
+      }
+    } catch (error) {
+      alert("An error occurred: " + error.message);
+    }
+  });

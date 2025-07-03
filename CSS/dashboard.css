@@ -1,0 +1,143 @@
+body {
+      background-color: #f5f6fa;
+   font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+    }
+    .sidebar {
+      width: 240px;
+      background-color: #000;
+      color: #fff;
+      height: 100vh;
+      position: fixed;
+      padding-top: 20px;
+    }
+
+  .sidebar a {
+  color: #fff;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  font-size: 15px;
+  border-left: 4px solid transparent;
+}
+
+.sidebar a:hover {
+  background-color: #1c1c1c;
+  border-left: 4px solid #5bc0de; 
+  color: #5bc0de;
+}
+
+.sidebar a.active {
+  background-color: #222;
+  border-left: 4px solid #ffc107; 
+  color: #ffc107;
+}
+
+.sidebar i {
+  font-size: 27px;
+}
+
+    .sidebar h4 {
+      text-align: center;
+      font-weight: 600;
+      font-size: 27px;
+      margin-bottom: 9%;
+    }
+    .main-content {
+      margin-left: 260px;
+      padding: 30px;
+    }
+    .top-banner {
+      background: #000;
+      color: white;
+      padding: 30px;
+      border-radius: 15px;
+      margin-bottom: 30px;
+    }
+
+    /* TOOL BOX STYLING */
+    .pdf-tool-box {
+      display: block;
+      border-radius: 16px;
+      padding: 25px 20px;
+      text-align: center;
+      text-decoration: none;
+      transition: all 0.3s ease-in-out;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      border: 1px solid #eaeaea;
+      height: 150px;
+      background: url(../Media/greenbg1.jpg);
+    }
+    .pdf-tool-box:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    }
+    .pdf-tool-box i {
+      font-size: 32px;
+      margin-bottom: 10px;
+      display: block;
+    }
+    .pdf-tool-box .tool-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    /* Responsivenesss and Toggle Button */
+/* Sidebar base styles */
+.sidebar {
+  width: 240px;
+  background-color: #000;
+  color: #fff;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  padding-top: 20px;
+  transition: transform 0.3s ease;
+  z-index: 1050;
+}
+
+/* Toggle button default position */
+#sidebarToggle {
+  top: 15px;
+  left: 15px;
+  z-index: 1060;
+}
+
+/* Move toggle beside sidebar when it's open */
+#sidebarToggle.move-right {
+  left: 255px;
+  transition: left 0.3s ease;
+}
+
+/* Hide sidebar on small screens */
+@media (max-width: 767.98px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+  .sidebar.show {
+    transform: translateX(0);
+  }
+
+  .main-content {
+    margin-left: 0 !important;
+  }
+}
+
+/* Desktop: show sidebar always */
+@media (min-width: 768px) {
+  .sidebar {
+    transform: none !important;
+  }
+  #sidebarToggle {
+    display: none;
+  }
+
+  .main-content {
+    margin-left: 260px;
+  }
+
+}

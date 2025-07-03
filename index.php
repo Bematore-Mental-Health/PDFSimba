@@ -41,7 +41,7 @@
   <li class="nav-item"><a class="nav-link" href="#faqs">FAQs</a></li>
       </ul>
       <div class="d-flex align-items-center">
-        <a href="index.php" class="text-dark me-3"><i class="fa-regular fa-user user-icon"></i></a>
+        <a href="signup.php" class="text-dark me-3"><i class="fa-regular fa-user user-icon"></i></a>
         <a href="tools.php" class="btn try-btn">TRY FOR FREE</a>
       </div>
     </div>
@@ -210,17 +210,18 @@
 </div>
 
 
- <div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#cadToPdfModal">
+<div class="col">
+  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#uploadSigningDocumentModal">
     <i class="bi bi-vector-pen text-pink fs-3 mb-2"></i>
-    <div class="tool-name">AutoCAD to PDF</div>
+    <div class="tool-name">Sign Document</div>
   </a>
 </div>
 
+
 <div class="col">
-  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#openofficeToPdfModal">
-    <i class="bi bi-journal-code text-info fs-3 mb-2"></i>
-    <div class="tool-name">OpenOffice to PDF</div>
+  <a href="#" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#editPdfModal">
+    <i class="bi bi-pencil-square text-info fs-3 mb-2"></i>
+    <div class="tool-name">Edit PDF</div>
   </a>
 </div>
 
@@ -750,42 +751,6 @@
   </div>
 </div>
 
-<!-- AutoCAD to PDF Modal -->
-<div class="modal fade" id="cadToPdfModal" tabindex="-1" aria-labelledby="cadToPdfModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="cadToPdfModalLabel">Convert AutoCAD to PDF</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body text-center">
-        <p class="fs-5 text-muted">🚧 This feature is not yet implemented.<br><strong>Coming Soon!</strong></p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-
-<!-- OpenOffice to PDF Modal -->
-<div class="modal fade" id="openofficeToPdfModal" tabindex="-1" aria-labelledby="openofficeToPdfModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="openofficeToPdfModalLabel">Convert OpenOffice to PDF</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body text-center">
-        <p class="fs-5 text-muted">🚧 This feature is not yet implemented.<br><strong>Coming Soon!</strong></p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- PDF to Word Modal -->
 <div class="modal fade" id="pdfToWordModal" tabindex="-1" aria-labelledby="pdfToWordModalLabel" aria-hidden="true">
@@ -1161,6 +1126,48 @@
     </div>
   </div>
 </div>
+
+
+<!-- Sign Document Modal -->
+<div class="modal fade" id="uploadSigningDocumentModal" tabindex="-1" aria-labelledby="uploadSigningDocumentModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form id="signingDocumentForm" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title">Upload Document for Signing</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <input type="file" class="form-control" name="document_file" accept=".pdf, .doc, .docx" required />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Open for Signing</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit PDF Modal -->
+<div class="modal fade" id="editPdfModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Upload PDF for Editing</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="uploadForm" enctype="multipart/form-data">
+          <input type="file" name="pdfFile" id="pdfFileInput" class="form-control mb-3" accept="application/pdf" required>
+          <button type="submit" class="btn btn-primary">Upload & Edit PDF</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <!-- Modal for iWork to PDF conversion -->
 <div class="modal fade" id="iworkToPdfModal" tabindex="-1" aria-labelledby="iworkToPdfModalLabel" aria-hidden="true">
