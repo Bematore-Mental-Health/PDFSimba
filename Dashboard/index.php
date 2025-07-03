@@ -1,3 +1,14 @@
+<?php
+include '../DashboardBackend/session.php';
+
+// Redirect to login page if session is not set
+if (!isUserLoggedIn()) {
+    header('Location: ../login.php');
+    exit();
+}
+?>
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,9 +36,16 @@
   <a href="jpgtopdf.php"><i class="bi bi-image me-2"></i> JPG to PDF</a>
   <a href="history.php"><i class="bi bi-clock-history me-2"></i> Full History</a>
   <a href="reports.php"><i class="bi bi-bar-chart me-2"></i> Reports</a>
-  <div class="p-3">
-    <button class="btn btn-light w-100"><i class="bi bi-box-arrow-right me-2"></i> Log Out</button>
-  </div>
+<div class="p-3">
+  <a href="../DashboardBackend/logout.php" class="btn btn-light text-dark w-100 d-flex align-items-center justify-content-center custom-logout-btn">
+    <i class="bi bi-box-arrow-right me-2 text-dark"></i> Log Out
+  </a>
+</div>
+
+
+
+
+
 </div>
 
 
@@ -35,10 +53,11 @@
 
   <div class="main-content">
     <div class="top-banner d-flex justify-content-between align-items-center">
-      <div>
-        <h4>Hi, Irham Muhammad Shidiq</h4>
-        <p>Convert, manage, and secure your documents with ease. Trusted by professionals and students worldwide. </p>
-      </div>
+     <div>
+  <h4>Hi, <?= htmlspecialchars($_SESSION['first_name'] . ' ' . $_SESSION['last_name']); ?></h4>
+  <p>Convert, manage, and secure your documents with ease. Trusted by professionals and students worldwide.</p>
+</div>
+
       <div>
         <i class="bi bi-book-half fs-1"></i>
       </div>

@@ -28,6 +28,12 @@ from docx2pdf import convert
 import tempfile
 import pypandoc
 from flask import send_file
+from docx import Document
+from htmldocx import HtmlToDocx
+from docx2pdf import convert
+from win32com.client import Dispatch
+from pdf2docx import Converter
+import traceback
 
 
 
@@ -1709,175 +1715,128 @@ def download_signed(filename):
 
         
 # Edit PDF Document
-@app.route('/upload-pdf-document', methods=['POST'])
-def upload_pdf_document():
+@app.route('/upload-edit-pdf', methods=['POST'])
+def upload_edit_pdf():
     if 'pdfFile' not in request.files:
-        return jsonify({"error": "No file provided"}), 400
+        return jsonify({'error': 'No file part'}), 400
 
     file = request.files['pdfFile']
     if file.filename == '':
-        return jsonify({"error": "No file selected"}), 400
+        return jsonify({'error': 'No selected file'}), 400
 
-    if not file.filename.endswith('.pdf'):
-        return jsonify({"error": "File must be a PDF"}), 400
+    if not file.filename.lower().endswith('.pdf'):
+        return jsonify({'error': 'Only PDF files are allowed'}), 400
 
-    unique_filename = f"{uuid.uuid4().hex}.pdf"
-    save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-    file.save(save_path)
+    try:
+        filename = secure_filename(file.filename)
+        unique_id = str(uuid.uuid4())
+        pdf_filename = f"{unique_id}_{filename}"
+        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename)
+        file.save(pdf_path)
 
-    return jsonify({"fileUrl": f"/edited-uploads/{unique_filename}"}), 200
+        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}.docx")
+        
+        # Convert PDF to DOCX with error handling
+        try:
+            converter = Converter(pdf_path)
+            converter.convert(docx_path)
+            converter.close()
+        except Exception as e:
+            os.remove(pdf_path)  # Clean up the saved PDF
+            return jsonify({'error': f'PDF conversion failed: {str(e)}'}), 500
 
-@app.route('/edited-uploads/<path:filename>')
-def serve_edited_pdf(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+        # Convert DOCX to HTML
+        try:
+            doc = Document(docx_path)
+            html_content = "".join(f"<p>{para.text}</p>" for para in doc.paragraphs if para.text.strip())
+        except Exception as e:
+            return jsonify({'error': f'DOCX processing failed: {str(e)}'}), 500
 
-@app.route('/pdf-document-editor')
-def pdf_document_editor():
-    pdf_file = request.args.get('file')
-    if not pdf_file:
-        return "PDF file not specified", 400
+        return jsonify({
+            'success': True,
+            'pdfFileName': pdf_filename,
+            'htmlContent': html_content
+        })
 
-    return render_template_string("""
-    <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Advanced PDF Editor</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.13.216/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-  <style>
-    #pdfContainer {
-      position: relative;
-      width: 100%;
-      height: 80vh;
-      overflow: auto;
-      border: 1px solid #ccc;
-    }
-    .pdfPage {
-      margin: 10px auto;
-      position: relative;
-    }
-    .editable-text {
-      position: absolute;
-      font-size: 16px;
-      background-color: rgba(255, 255, 255, 0.8);
-      border: 1px dashed #333;
-      padding: 2px 4px;
-      cursor: move;
-    }
-    #toolbar {
-      margin-bottom: 1rem;
-    }
-  </style>
-</head>
-<body>
-  <div class="container mt-4">
-    <div id="toolbar" class="d-flex justify-content-between">
-      <button id="addTextButton" class="btn btn-primary">Add Text</button>
-      <button id="savePdfButton" class="btn btn-success">Save PDF</button>
-    </div>
-    <div id="pdfContainer"></div>
-  </div>
+    except Exception as e:
+        app.logger.error(f"Error in upload-edit-pdf: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Internal server error'}), 500
 
-  <script>
-    const pdfUrl = "{{ request.args.get('file') }}"; // Backend-supplied PDF URL
-    const pdfContainer = document.getElementById("pdfContainer");
+@app.route('/get-pdf-content-for-editing')
+def get_pdf_content_for_editing():
+    try:
+        file_id = request.args.get('file_id')
+        if not file_id:
+            return jsonify({'error': 'Missing file_id parameter'}), 400
 
-    let pdfDoc = null;
+        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], file_id.replace('.pdf', '.docx'))
+        if not os.path.exists(docx_path):
+            return jsonify({'error': 'Document not found'}), 404
 
-    async function loadPdf() {
-      const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
-      pdfDoc = pdf;
+        doc = Document(docx_path)
+        html_content = "".join(f"<p>{para.text}</p>" for para in doc.paragraphs if para.text.strip())
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 1.5 });
+        return jsonify({'content': html_content})
+    except Exception as e:
+        app.logger.error(f"Error in get-pdf-content: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Internal server error'}), 500
 
-        const canvas = document.createElement("canvas");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        canvas.classList.add("pdfPage");
-        pdfContainer.appendChild(canvas);
+@app.route('/pdf-editor-view')
+def pdf_editor_view():
+    file_id = request.args.get('file')
+    if not file_id:
+        return "Missing file parameter", 400
+    return render_template('editor.html', file_id=file_id)
 
-        const context = canvas.getContext("2d");
-        await page.render({ canvasContext: context, viewport }).promise;
-      }
-    }
 
-    function addTextToPage() {
-      const newText = document.createElement("div");
-      newText.contentEditable = true;
-      newText.textContent = "Editable Text";
-      newText.classList.add("editable-text");
-      newText.style.left = "50px";
-      newText.style.top = "50px";
-      pdfContainer.appendChild(newText);
 
-      // Make the text draggable
-      newText.onmousedown = function (event) {
-        event.preventDefault();
-        const shiftX = event.clientX - newText.getBoundingClientRect().left;
-        const shiftY = event.clientY - newText.getBoundingClientRect().top;
+@app.route('/save-edited-pdf', methods=['POST'])
+def save_edited_pdf():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data received'}), 400
 
-        function moveAt(pageX, pageY) {
-          newText.style.left = pageX - shiftX + "px";
-          newText.style.top = pageY - shiftY + "px";
-        }
+        file_id = data.get('file_id')
+        html_content = data.get('content')
+        if not file_id or not html_content:
+            return jsonify({'error': 'Missing parameters'}), 400
 
-        function onMouseMove(event) {
-          moveAt(event.pageX, event.pageY);
-        }
+        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], file_id.replace('.pdf', '.docx'))
+        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], file_id)
 
-        document.addEventListener("mousemove", onMouseMove);
+        # Convert HTML to DOCX
+        new_doc = Document()
+        parser = HtmlToDocx()
+        parser.add_html_to_document(html_content, new_doc)
+        new_doc.save(docx_path)
 
-        newText.onmouseup = function () {
-          document.removeEventListener("mousemove", onMouseMove);
-          newText.onmouseup = null;
-        };
-      };
+        # Convert DOCX to PDF using Word
+        pythoncom.CoInitialize()
+        word = Dispatch('Word.Application')
+        doc = word.Documents.Open(os.path.abspath(docx_path))
+        doc.SaveAs(os.path.abspath(pdf_path), FileFormat=17)  # 17 = wdFormatPDF
+        doc.Close()
+        word.Quit()
 
-      newText.ondragstart = function () {
-        return false;
-      };
-    }
+        return jsonify({'success': True, 'pdfUrl': file_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-    async function savePdf() {
-      const pdfBytes = await fetch(pdfUrl).then((res) => res.arrayBuffer());
-      const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
 
-      const pages = pdfDoc.getPages();
-      const page = pages[0]; // Modify the first page
-
-      // Add all editable text
-      const textElements = document.querySelectorAll(".editable-text");
-      for (const textElement of textElements) {
-        const x = parseInt(textElement.style.left);
-        const y = pdfContainer.offsetHeight - parseInt(textElement.style.top); // Flip y-axis
-        const text = textElement.textContent;
-
-        page.drawText(text, { x, y, size: 16, color: PDFLib.rgb(0, 0, 0) });
-      }
-
-      const pdfBytesFinal = await pdfDoc.save();
-      const blob = new Blob([pdfBytesFinal], { type: "application/pdf" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "edited-document.pdf";
-      link.click();
-    }
-
-    document.getElementById("addTextButton").addEventListener("click", addTextToPage);
-    document.getElementById("savePdfButton").addEventListener("click", savePdf);
-
-    loadPdf();
-  </script>
-</body>
-</html>
-
-    """)
-
+@app.route('/download-pdf-file/<filename>')
+def download_pdf_file(filename):
+    try:
+        return send_from_directory(
+            app.config['UPLOAD_FOLDER'],
+            filename,
+            as_attachment=True,
+            mimetype='application/pdf'
+        )
+    except FileNotFoundError:
+        return jsonify({'error': 'File not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # Background thread: Auto-cleanup old files

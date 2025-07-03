@@ -1069,28 +1069,35 @@ document.getElementById("signingDocumentForm").addEventListener("submit", functi
 });
 
   // Edit PDF 
-  document.getElementById("uploadForm").addEventListener("submit", async (e) => {
-    e.preventDefault(); // Prevent default form submission
-
-    const form = e.target;
-    const formData = new FormData(form);
+document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
 
     try {
-      const response = await fetch(`${BACKEND_URL}/upload-pdf-document`, {
-        method: "POST",
-        body: formData,
-      });
+        const response = await fetch(`${BACKEND_URL}/upload-edit-pdf`, {
+            method: "POST",
+            body: formData,
+            headers: {
+                'Accept': 'application/json'  // Explicitly ask for JSON
+            }
+        });
 
-      const result = await response.json();
+        // First check if response is OK
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
 
-      if (response.ok) {
-        // Redirect to the editor in a new tab
-        const editorUrl = `${BACKEND_URL}/pdf-document-editor?file=${encodeURIComponent(result.fileUrl)}`;
-        window.open(editorUrl, "_blank");
-      } else {
-        alert(result.error || "Failed to upload the PDF");
-      }
+        const result = await response.json();
+
+        if (result.success) {
+            const editorUrl = `${BACKEND_URL}/pdf-editor-view?file=${encodeURIComponent(result.pdfFileName)}`;
+            window.open(editorUrl, "_blank");
+        } else {
+            alert(result.error || "Failed to process PDF");
+        }
     } catch (error) {
-      alert("An error occurred: " + error.message);
+        alert("Error: " + error.message);
+        console.error('Error:', error);
     }
-  });
+});
