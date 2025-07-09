@@ -61,8 +61,8 @@
         <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#excelToPdfModal"><i class="fab fa-microsoft icon-green"></i> Excel to PDF</a>
         <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#pptToPdfModal"><i class="fab fa-microsoft icon-orange"></i> PowerPoint to PDF</a>
         <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#jpgToPdfModal"><i class="fas fa-image icon-purple"></i> JPG to PDF</a>
-        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#cadToPdfModal"><i class="fas fa-drafting-compass icon-pink"></i> AutoCAD to PDF</a>
-        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#openofficeToPdfModal"><i class="fas fa-file-alt icon-cyan"></i> OpenOffice to PDF</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#uploadSigningDocumentModal"><i class="fas fa-signature icon-pink"></i>Sign Document</a>
+        <a href="#" class="tool-link" data-bs-toggle="modal" data-bs-target="#editPdfModal"><i class="fas fa-file-pen icon-cyan"></i> Edit PDF</a>
         <a href="#" class="tool-link ebook-tool-box" data-bs-toggle="modal" data-bs-target="#ebookToPdfModal"><i class="fas fa-book icon-yellow"></i> eBooks to PDF</a>
         <a href="#" class="tool-link" id="iworkToPdfTrigger" class="pdf-tool-box text-center" data-bs-toggle="modal" data-bs-target="#iworkToPdfModal"><i class="fab fa-apple icon-dark"></i> iWork to PDF</a>
       </div>
@@ -289,38 +289,41 @@
   </div>
 </div>
 
-<!-- AutoCAD to PDF Modal -->
-<div class="modal fade" id="cadToPdfModal" tabindex="-1" aria-labelledby="cadToPdfModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+<!-- Sign Document Modal -->
+<div class="modal fade" id="uploadSigningDocumentModal" tabindex="-1" aria-labelledby="uploadSigningDocumentModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="cadToPdfModalLabel">Convert AutoCAD to PDF</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body text-center">
-        <p class="fs-5 text-muted">🚧 This feature is not yet implemented.<br><strong>Coming Soon!</strong></p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-      </div>
+      <form id="signingDocumentForm" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title">Upload Document for Signing</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <input type="file" class="form-control" name="document_file" accept=".pdf, .doc, .docx" required />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Open for Signing</button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
 
-
-<!-- OpenOffice to PDF Modal -->
-<div class="modal fade" id="openofficeToPdfModal" tabindex="-1" aria-labelledby="openofficeToPdfModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+<!-- Edit PDF Modal -->
+<div class="modal fade" id="editPdfModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="openofficeToPdfModalLabel">Convert OpenOffice to PDF</h5>
+        <h5 class="modal-title">Upload PDF for Editing</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body text-center">
-        <p class="fs-5 text-muted">🚧 This feature is not yet implemented.<br><strong>Coming Soon!</strong></p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      <div class="modal-body">
+        <form id="uploadForm" enctype="multipart/form-data">
+          <input type="file" name="pdfFile" id="pdfFileInput" class="form-control mb-3" accept="application/pdf" required>
+          <button type="submit" class="btn btn-primary">Upload & Edit PDF</button>
+        </form>
       </div>
     </div>
   </div>
