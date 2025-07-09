@@ -6,7 +6,6 @@ import time
 from bs4 import BeautifulSoup
 from docx import Document
 from html2docx import html2docx
-import os
 import uuid
 import pandas as pd
 from flask import Flask, request, jsonify, send_from_directory, render_template_string
@@ -23,17 +22,36 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from PIL import Image
 import pdf2image
-from docx import Document
 from docx2pdf import convert
 import tempfile
-import pypandoc
-from flask import send_file
-from docx import Document
-from htmldocx import HtmlToDocx
-from docx2pdf import convert
-from win32com.client import Dispatch
+from win32com import client as wc
 from pdf2docx import Converter
+from win32com.client import Dispatch
+from werkzeug.utils import secure_filename
+from bs4 import BeautifulSoup
 import traceback
+import pythoncom
+import base64
+import re
+from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask_cors import CORS
+from docx import Document
+from pdf2docx import Converter
+from win32com.client import Dispatch
+from werkzeug.utils import secure_filename
+import time
+import threading
+import shutil
+from docx.shared import RGBColor
+from bs4 import  Tag
+from docx.document import Document as DocxDocument
+from docx.table import _Cell
+from docx.text.paragraph import Paragraph
+from docx.text.run import Run
+from docx.enum.style import WD_STYLE_TYPE
+from docx.shared import Pt, Inches
+from docx import Document
+from docx.document import Document as DocxDocument
 
 
 
@@ -49,7 +67,6 @@ from PyPDF2 import PdfMerger
 import base64
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-import pythoncom
 
 
 
@@ -962,6 +979,27 @@ def serve_ebook_pdf(filename):
 
 
 # Sign Document 
+import comtypes.client
+import os
+
+def convert_office_to_pdf(input_path, output_path):
+    ext = os.path.splitext(input_path)[1].lower()
+    if ext not in ['.doc', '.docx']:
+        raise ValueError("Unsupported file type for conversion")
+
+    comtypes.CoInitialize()
+    word = comtypes.client.CreateObject('Word.Application')
+    word.Visible = False
+
+    try:
+        doc = word.Documents.Open(input_path)
+        doc.SaveAs(output_path, FileFormat=17)  # 17 = wdFormatPDF
+        doc.Close()
+    finally:
+        word.Quit()
+        comtypes.CoUninitialize()
+
+
 @app.route('/upload-signing-document', methods=['POST'])
 def upload_signing_document():
     file = request.files.get('document_file')
@@ -969,30 +1007,28 @@ def upload_signing_document():
         return jsonify({"error": "No file provided"}), 400
 
     filename = secure_filename(file.filename)
-    if not (filename.lower().endswith('.pdf') or filename.lower().endswith('.doc') or filename.lower().endswith('.docx')):
-        return jsonify({"error": "Invalid file type. Only PDF, DOC, and DOCX files are allowed."}), 400
-
+    file_ext = os.path.splitext(filename)[1].lower()
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     file.save(file_path)
 
-    # Convert Word docs to PDF for display
-    if filename.lower().endswith(('.doc', '.docx')):
+    # Convert Word to PDF
+    if file_ext in ['.doc', '.docx']:
+        pdf_filename = os.path.splitext(filename)[0] + '.pdf'
+        pdf_path = os.path.join(UPLOAD_FOLDER, pdf_filename)
+
         try:
-            pdf_path = os.path.join(UPLOAD_FOLDER, f"{os.path.splitext(filename)[0]}.pdf")
-            pypandoc.convert_file(file_path, 'pdf', outputfile=pdf_path)
-            display_filename = f"{os.path.splitext(filename)[0]}.pdf"
+            convert_office_to_pdf(file_path, pdf_path)
+            os.remove(file_path)  # Remove the Word file
+            return jsonify({"document_id": pdf_filename})
         except Exception as e:
-            return jsonify({"error": f"Failed to convert Word document: {str(e)}"}), 400
-    else:
-        display_filename = filename
+            print("Word to PDF conversion error:", e)
+            return jsonify({"error": "Failed to convert Word document"}), 500
 
-    return jsonify({
-        "document_id": filename,
-        "display_document_id": display_filename,
-        "redirect_url": f"/sign-document/{filename}",
-        "original_extension": os.path.splitext(filename)[1].lower()
-    })
-
+    # Handle actual PDF uploads
+    elif file_ext == '.pdf':
+        return jsonify({"document_id": filename})
+    
+    return jsonify({"error": "Unsupported file type"}), 400
 
 @app.route('/sign-document/<document_id>')
 def sign_document(document_id):
@@ -1155,6 +1191,8 @@ let pageContainers = [];
 let signatures = [];
 let pdfDoc = null;
 let pageRects = [];
+let clickX = 0;
+let clickY = 0;
 
 // Load PDF with page containers
 pdfjsLib.getDocument(pdfUrl).promise.then(pdf => {
@@ -1200,8 +1238,8 @@ pdfjsLib.getDocument(pdfUrl).promise.then(pdf => {
         if (e.target.tagName !== 'CANVAS') return;
         
         const rect = canvas.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
+        clickX = e.clientX - rect.left;
+        clickY = e.clientY - rect.top;
         
         currentPage = i;
         const modal = new bootstrap.Modal(document.getElementById('signatureModal'));
@@ -1340,14 +1378,16 @@ document.getElementById("addSignature").addEventListener("click", function () {
     const pageContainer = document.querySelector(`.page-container[data-page-number="${currentPage}"]`);
     if (!pageContainer) return;
 
-    // Create signature element
+    // Create signature element centered at click position
+    const signatureWidth = 200;
+    const signatureHeight = 100;
     const wrapper = document.createElement("div");
     wrapper.className = "signature-preview";
     wrapper.style.position = "absolute";
-    wrapper.style.left = "50px";
-    wrapper.style.top = "50px";
-    wrapper.style.width = "200px";
-    wrapper.style.height = "100px";
+    wrapper.style.left = `${clickX - signatureWidth/2}px`;
+    wrapper.style.top = `${clickY - signatureHeight/2}px`;
+    wrapper.style.width = `${signatureWidth}px`;
+    wrapper.style.height = `${signatureHeight}px`;
 
     const img = document.createElement("img");
     img.src = signatureData;
@@ -1389,10 +1429,10 @@ document.getElementById("addSignature").addEventListener("click", function () {
         page: currentPage,
         data: signatureData,
         position: { 
-            left: 50, 
-            top: 50, 
-            width: 200, 
-            height: 100,
+            left: clickX - signatureWidth/2, 
+            top: clickY - signatureHeight/2, 
+            width: signatureWidth, 
+            height: signatureHeight,
             scale: pageInfo.scale,
             originalWidth: pageInfo.viewport.width,
             originalHeight: pageInfo.viewport.height
@@ -1713,8 +1753,8 @@ def save_signed_document():
 def download_signed(filename):
     return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
 
-        
-# Edit PDF Document
+
+# Edit PDF document 
 @app.route('/upload-edit-pdf', methods=['POST'])
 def upload_edit_pdf():
     if 'pdfFile' not in request.files:
@@ -1734,33 +1774,101 @@ def upload_edit_pdf():
         pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename)
         file.save(pdf_path)
 
-        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}.docx")
+        docx_filename = f"{unique_id}.docx"
+        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], docx_filename)
         
-        # Convert PDF to DOCX with error handling
+        # Convert PDF to DOCX with enhanced error handling
         try:
             converter = Converter(pdf_path)
-            converter.convert(docx_path)
-            converter.close()
-        except Exception as e:
-            os.remove(pdf_path)  # Clean up the saved PDF
-            return jsonify({'error': f'PDF conversion failed: {str(e)}'}), 500
+            # Try with images first
+            try:
+                converter.convert(docx_path, keep_images=True)
+            except Exception as img_error:
+                app.logger.warning(f"Image conversion failed, trying without images: {str(img_error)}")
+                # Fallback to conversion without images
+                converter.convert(docx_path, keep_images=False)
+            finally:
+                converter.close()
+        except Exception as conv_error:
+            app.logger.error(f"PDF conversion failed: {str(conv_error)}")
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+            return jsonify({'error': f'PDF conversion failed: {str(conv_error)}'}), 500
 
-        # Convert DOCX to HTML
+        # Process DOCX to HTML with images and styles
         try:
             doc = Document(docx_path)
-            html_content = "".join(f"<p>{para.text}</p>" for para in doc.paragraphs if para.text.strip())
-        except Exception as e:
-            return jsonify({'error': f'DOCX processing failed: {str(e)}'}), 500
+            html_content = process_docx_to_html(doc, unique_id)
+        except Exception as proc_error:
+            app.logger.error(f"DOCX processing failed: {str(proc_error)}")
+            return jsonify({'error': f'DOCX processing failed: {str(proc_error)}'}), 500
 
         return jsonify({
             'success': True,
             'pdfFileName': pdf_filename,
+            'docxFilename': docx_filename,
             'htmlContent': html_content
         })
 
     except Exception as e:
         app.logger.error(f"Error in upload-edit-pdf: {str(e)}\n{traceback.format_exc()}")
+        # Clean up files if they exist
+        if 'pdf_path' in locals() and os.path.exists(pdf_path):
+            os.remove(pdf_path)
+        if 'docx_path' in locals() and os.path.exists(docx_path):
+            os.remove(docx_path)
         return jsonify({'error': 'Internal server error'}), 500
+
+def process_docx_to_html(doc, unique_id):
+    """Convert DOCX to HTML while preserving images and styles"""
+    html_parts = []
+    images_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_images")
+    os.makedirs(images_dir, exist_ok=True)
+    
+    for para in doc.paragraphs:
+        if para.text.strip():
+            # Process runs to preserve styles
+            para_html = []
+            for run in para.runs:
+                text = run.text
+                if not text.strip():
+                    continue
+                    
+                style = []
+                if run.bold:
+                    style.append('font-weight:bold')
+                if run.italic:
+                    style.append('font-style:italic')
+                if run.underline:
+                    style.append('text-decoration:underline')
+                if run.font.color.rgb:
+                    style.append(f'color:#{run.font.color.rgb[2:]}')
+                    
+                style_str = ';'.join(style)
+                para_html.append(f'<span style="{style_str}">{text}</span>')
+            
+            if para_html:
+                html_parts.append(f'<p>{"".join(para_html)}</p>')
+    
+    # Process images
+    rels = doc.part.rels
+    for rel in rels:
+        if "image" in rels[rel].target_ref:
+            image_part = rels[rel].target_part
+            image_ext = image_part.content_type.split('/')[-1]
+            image_filename = f"{uuid.uuid4()}.{image_ext}"
+            image_path = os.path.join(images_dir, image_filename)
+            
+            with open(image_path, 'wb') as f:
+                f.write(image_part.blob)
+            
+            # Convert image to base64 for HTML embedding
+            with open(image_path, 'rb') as img_file:
+                img_data = base64.b64encode(img_file.read()).decode('utf-8')
+                img_src = f"data:image/{image_ext};base64,{img_data}"
+                html_parts.append(f'<img src="{img_src}" style="max-width:100%;">')
+
+    return "".join(html_parts)
 
 @app.route('/get-pdf-content-for-editing')
 def get_pdf_content_for_editing():
@@ -1769,14 +1877,26 @@ def get_pdf_content_for_editing():
         if not file_id:
             return jsonify({'error': 'Missing file_id parameter'}), 400
 
-        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], file_id.replace('.pdf', '.docx'))
+        # Clean the filename and extract UUID
+        clean_file_id = secure_filename(file_id)
+        unique_id = clean_file_id.split('_')[0]
+        docx_filename = f"{unique_id}.docx"
+        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], docx_filename)
+        
+        # Verify the file exists
         if not os.path.exists(docx_path):
-            return jsonify({'error': 'Document not found'}), 404
+            existing_files = os.listdir(app.config['UPLOAD_FOLDER'])
+            return jsonify({
+                'error': f'Document not found at path: {docx_path}',
+                'looking_for': docx_filename,
+                'existing_files': existing_files
+            }), 404
 
+        # Process the DOCX file
         doc = Document(docx_path)
-        html_content = "".join(f"<p>{para.text}</p>" for para in doc.paragraphs if para.text.strip())
+        html_content = process_docx_to_html(doc, unique_id)
 
-        return jsonify({'content': html_content})
+        return jsonify({'success': True, 'content': html_content})
     except Exception as e:
         app.logger.error(f"Error in get-pdf-content: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'error': 'Internal server error'}), 500
@@ -1787,8 +1907,6 @@ def pdf_editor_view():
     if not file_id:
         return "Missing file parameter", 400
     return render_template('editor.html', file_id=file_id)
-
-
 
 @app.route('/save-edited-pdf', methods=['POST'])
 def save_edited_pdf():
@@ -1802,24 +1920,341 @@ def save_edited_pdf():
         if not file_id or not html_content:
             return jsonify({'error': 'Missing parameters'}), 400
 
-        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], file_id.replace('.pdf', '.docx'))
-        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], file_id)
+        # Clean the filename and extract UUID
+        clean_file_id = secure_filename(file_id)
+        unique_id = clean_file_id.split('_')[0]
+        
+        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}.docx")
+        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], clean_file_id)
 
-        # Convert HTML to DOCX
-        new_doc = Document()
-        parser = HtmlToDocx()
-        parser.add_html_to_document(html_content, new_doc)
-        new_doc.save(docx_path)
+        # Create images directory
+        images_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_images")
+        os.makedirs(images_dir, exist_ok=True)
+
+        # Create a new document with styles
+        doc = Document()
+        
+        # Add styles to the document
+        styles = doc.styles
+        if 'Heading 1' not in styles:
+            styles.add_style('Heading 1', WD_STYLE_TYPE.PARAGRAPH)
+        if 'Heading 2' not in styles:
+            styles.add_style('Heading 2', WD_STYLE_TYPE.PARAGRAPH)
+        
+        # Parse HTML with BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Process all elements in order
+        for element in soup.find_all(True):
+            if element.name == 'p':
+                para = doc.add_paragraph()
+                process_element(element, para, images_dir)
+            elif element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                heading_level = int(element.name[1])
+                para = doc.add_paragraph(style=f'Heading {heading_level}')
+                process_element(element, para, images_dir)
+            elif element.name == 'img':
+                add_image_to_doc(element, doc, images_dir)
+            elif element.name in ['ul', 'ol']:
+                process_list(element, doc, images_dir, element.name == 'ol')
+            elif element.name == 'table':
+                process_table(element, doc, images_dir)
+
+        # Save the DOCX file
+        doc.save(docx_path)
 
         # Convert DOCX to PDF using Word
         pythoncom.CoInitialize()
-        word = Dispatch('Word.Application')
-        doc = word.Documents.Open(os.path.abspath(docx_path))
-        doc.SaveAs(os.path.abspath(pdf_path), FileFormat=17)  # 17 = wdFormatPDF
-        doc.Close()
-        word.Quit()
+        try:
+            word = Dispatch('Word.Application')
+            word.Visible = False
+            word.DisplayAlerts = False
+            
+            doc = word.Documents.Open(os.path.abspath(docx_path))
+            doc.SaveAs(os.path.abspath(pdf_path), FileFormat=17)
+            doc.Close(False)
+            word.Quit()
+        except Exception as e:
+            app.logger.error(f"PDF conversion failed: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({'error': f'PDF conversion failed: {str(e)}'}), 500
+        finally:
+            pythoncom.CoUninitialize()
 
-        return jsonify({'success': True, 'pdfUrl': file_id})
+        return jsonify({'success': True, 'pdfUrl': clean_file_id})
+    except Exception as e:
+        app.logger.error(f"Error saving PDF: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+def process_element(element, para, images_dir):
+    """Process HTML element with comprehensive style and content handling"""
+    for content in element.contents:
+        if content.name == 'img':
+            add_image_to_paragraph(content, para, images_dir)
+        elif content.name == 'span':
+            run = para.add_run(content.text)
+            apply_styles_to_run(run, content.get('style', ''))
+        elif content.name == 'b' or content.name == 'strong':
+            run = para.add_run(content.text)
+            run.bold = True
+        elif content.name == 'i' or content.name == 'em':
+            run = para.add_run(content.text)
+            run.italic = True
+        elif content.name == 'u':
+            run = para.add_run(content.text)
+            run.underline = True
+        elif content.name == 'br':
+            para.add_run().add_break()
+        elif content.name is None:  # Text node
+            text = str(content).replace('\n', ' ')
+            if text.strip():
+                para.add_run(text)
+
+def apply_styles_to_run(run, style_str):
+    """Apply CSS styles to a docx run with comprehensive style support"""
+    if not style_str:
+        return
+        
+    styles = [s.strip() for s in style_str.split(';') if s.strip()]
+    style_dict = {}
+    
+    for style in styles:
+        if ':' not in style:
+            continue
+        prop, value = style.split(':', 1)
+        prop = prop.strip().lower()
+        value = value.strip().lower()
+        style_dict[prop] = value
+    
+    # Apply styles
+    if 'font-weight' in style_dict and style_dict['font-weight'] == 'bold':
+        run.bold = True
+    if 'font-style' in style_dict and style_dict['font-style'] == 'italic':
+        run.italic = True
+    if 'text-decoration' in style_dict and 'underline' in style_dict['text-decoration']:
+        run.underline = True
+    if 'color' in style_dict:
+        color = style_dict['color']
+        if color.startswith('#'):
+            try:
+                run.font.color.rgb = RGBColor.from_string(color[1:])
+            except:
+                pass
+    if 'font-size' in style_dict:
+        try:
+            size = float(style_dict['font-size'].replace('pt', ''))
+            run.font.size = Pt(size)
+        except:
+            pass
+
+def process_image_element(element, parent, images_dir):
+    """Process image element with better format support and error handling"""
+    try:
+        if 'src' not in element.attrs:
+            return
+            
+        src = element['src']
+        if not src.startswith('data:image'):
+            return
+            
+        # Extract image format from data URL
+        img_format = src.split(';')[0].split('/')[-1]
+        if img_format not in ['png', 'jpeg', 'jpg', 'gif']:
+            img_format = 'png'  # default to png if format not recognized
+            
+        img_data = src.split('base64,')[-1]
+        img_bytes = base64.b64decode(img_data)
+        img_filename = f"{uuid.uuid4()}.{img_format}"
+        img_path = os.path.join(images_dir, img_filename)
+        
+        # Ensure directory exists
+        os.makedirs(images_dir, exist_ok=True)
+        
+        with open(img_path, 'wb') as f:
+            f.write(img_bytes)
+        
+        # Add image to document with size control
+        if isinstance(parent, Document):
+            parent.add_picture(img_path, width=Inches(6))  # Limit width to 6 inches
+        else:  # Paragraph
+            parent.add_run().add_picture(img_path, width=Inches(6))
+            
+    except Exception as e:
+        app.logger.error(f"Error processing image: {str(e)}\n{traceback.format_exc()}")
+        raise
+
+def add_image_to_doc(element, doc, images_dir):
+    """Add image directly to document"""
+    process_image_element(element, doc, images_dir)
+
+def add_image_to_paragraph(element, para, images_dir):
+    """Embed an image inside a paragraph from base64 src"""
+    if 'src' not in element.attrs or not element['src'].startswith('data:image'):
+        return
+
+    try:
+        img_data = element['src'].split('base64,')[-1]
+        img_bytes = base64.b64decode(img_data)
+        ext = element['src'].split(';')[0].split('/')[-1] or 'png'
+        img_filename = f"{uuid.uuid4()}.{ext}"
+        img_path = os.path.join(images_dir, img_filename)
+
+        with open(img_path, 'wb') as f:
+            f.write(img_bytes)
+
+        run = para.add_run()
+        run.add_picture(img_path)
+    except Exception as e:
+        app.logger.error(f"Failed to embed image: {str(e)}")
+
+def process_image_element(element, parent, images_dir):
+    """Process image element"""
+    try:
+        if 'src' not in element.attrs:
+            return
+            
+        src = element['src']
+        if not src.startswith('data:image'):
+            return
+            
+        img_data = src.split('base64,')[-1]
+        img_bytes = base64.b64decode(img_data)
+        img_filename = f"{uuid.uuid4()}.png"
+        img_path = os.path.join(images_dir, img_filename)
+        
+        with open(img_path, 'wb') as f:
+            f.write(img_bytes)
+        
+        if isinstance(parent, Document):
+            parent.add_picture(img_path)
+        else:  # Paragraph
+            parent.add_run().add_picture(img_path)
+    except Exception as e:
+        app.logger.error(f"Error processing image: {str(e)}")
+
+def process_list(element, doc, images_dir, is_ordered=False):
+    """Process list elements (ul/ol)"""
+    for item in element.find_all('li', recursive=False):
+        if is_ordered:
+            para = doc.add_paragraph(style='List Number')
+        else:
+            para = doc.add_paragraph(style='List Bullet')
+        process_element(item, para, images_dir)
+
+def process_table(element, doc, images_dir):
+    """Process table elements"""
+    table = doc.add_table(rows=1, cols=1)
+    for row in element.find_all('tr'):
+        cells = row.find_all(['td', 'th'])
+        if not cells:
+            continue
+            
+        table_row = table.add_row()
+        for i, cell in enumerate(cells):
+            if i >= len(table_row.cells):
+                table.add_column()
+            process_element(cell, table_row.cells[i], images_dir)
+
+
+def process_html_to_docx(html_content, doc, unique_id):
+    """Improved HTML to DOCX conversion with better style handling"""
+    soup = BeautifulSoup(html_content, 'html.parser')
+    images_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_images")
+    os.makedirs(images_dir, exist_ok=True)
+    
+    # Process all elements in order
+    for element in soup.find_all(True):
+        if element.name == 'p':
+            para = doc.add_paragraph()
+            self.process_element_content(element, para, images_dir)
+        elif element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+            heading_level = int(element.name[1])
+            para = doc.add_paragraph(style=f'Heading {heading_level}')
+            self.process_element_content(element, para, images_dir)
+        elif element.name == 'img':
+            self.process_image(element, doc, images_dir)
+        elif element.name in ['ul', 'ol']:
+            self.process_list(element, doc, images_dir, element.name == 'ol')
+        elif element.name == 'table':
+            self.process_table(element, doc, images_dir)
+
+def process_element_content(element, para, images_dir):
+    """Process content within an element with styles"""
+    for content in element.contents:
+        if content.name == 'img':
+            self.process_image(content, para, images_dir)
+        elif content.name == 'span':
+            run = para.add_run(content.text)
+            self.apply_styles(run, content.get('style', ''))
+        elif content.name is None:  # Text node
+            para.add_run(str(content))
+
+from docx.shared import RGBColor
+
+def apply_styles(run, style_str):
+    """Apply CSS styles to a docx run"""
+    styles = style_str.split(';')
+    for style in styles:
+        if not style.strip():
+            continue
+        parts = style.split(':', 1)
+        if len(parts) != 2:
+            continue
+
+        prop, value = parts
+        prop = prop.strip().lower()
+        value = value.strip().lower()
+
+        if prop == 'font-weight' and value == 'bold':
+            run.bold = True
+        elif prop == 'font-style' and value == 'italic':
+            run.italic = True
+        elif prop == 'text-decoration':
+            if 'underline' in value:
+                run.underline = True
+        elif prop == 'color':
+            match = re.search(r'#?([0-9a-f]{6})', value)
+            if match:
+                hex_color = match.group(1).upper()
+                run.font.color.rgb = RGBColor.from_string(hex_color)
+
+
+def process_image(element, parent, images_dir):
+    """Process image element"""
+    img_data = element['src'].split('base64,')[-1]
+    img_bytes = base64.b64decode(img_data)
+    img_filename = f"{uuid.uuid4()}.png"
+    img_path = os.path.join(images_dir, img_filename)
+    
+    with open(img_path, 'wb') as f:
+        f.write(img_bytes)
+    
+    if isinstance(parent, Document):
+        parent.add_picture(img_path)
+    else:  # Paragraph
+        parent.add_run().add_picture(img_path)
+
+@app.route('/upload-image', methods=['POST'])
+def upload_image():
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image uploaded'}), 400
+    
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    try:
+        filename = secure_filename(file.filename)
+        unique_id = str(uuid.uuid4())
+        image_filename = f"{unique_id}_{filename}"
+        image_path = os.path.join(app.config['UPLOAD_FOLDER'], image_filename)
+        file.save(image_path)
+        
+        # Return URL or base64 data
+        with open(image_path, 'rb') as img_file:
+            img_data = base64.b64encode(img_file.read()).decode('utf-8')
+            img_src = f"data:image/{filename.split('.')[-1]};base64,{img_data}"
+            return jsonify({'url': img_src})
+            
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1827,34 +2262,59 @@ def save_edited_pdf():
 @app.route('/download-pdf-file/<filename>')
 def download_pdf_file(filename):
     try:
+        filename = secure_filename(filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File not found'}), 404
+            
         return send_from_directory(
             app.config['UPLOAD_FOLDER'],
             filename,
             as_attachment=True,
             mimetype='application/pdf'
         )
-    except FileNotFoundError:
-        return jsonify({'error': 'File not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-
+        
 # Background thread: Auto-cleanup old files
-def cleanup_old_files(folder_paths, max_age_minutes=30, check_interval_seconds=600):
+def cleanup_old_files(folder_paths, max_age_minutes=120, check_interval_seconds=7200):
+    """
+    Aggressively clean up ALL files and folders in specified paths
+    
+    Args:
+        folder_paths: List of folders to clean (e.g., ['uploads', 'converted'])
+        max_age_minutes: Max age in minutes before deletion (default 120 = 2 hours)
+        check_interval_seconds: How often to run cleanup (default 7200 = 2 hours)
+    """
     def run_cleanup():
         while True:
             now = time.time()
             for folder in folder_paths:
-                for filename in os.listdir(folder):
-                    filepath = os.path.join(folder, filename)
-                    if os.path.isfile(filepath):
-                        age_minutes = (now - os.path.getmtime(filepath)) / 60
+                try:
+                    # Skip if folder doesn't exist
+                    if not os.path.exists(folder):
+                        continue
+                        
+                    # Process all items in folder
+                    for item in os.listdir(folder):
+                        item_path = os.path.join(folder, item)
+                        
+                        # Calculate age in minutes
+                        age_minutes = (now - os.path.getmtime(item_path)) / 60
+                        
                         if age_minutes > max_age_minutes:
                             try:
-                                os.remove(filepath)
-                                print(f"Deleted old file: {filepath}")
+                                if os.path.isfile(item_path) or os.path.islink(item_path):
+                                    os.remove(item_path)
+                                    print(f"Deleted file: {item_path}")
+                                elif os.path.isdir(item_path):
+                                    shutil.rmtree(item_path)
+                                    print(f"Deleted folder: {item_path}")
                             except Exception as e:
-                                print(f"Error deleting file {filepath}: {e}")
+                                print(f"Error deleting {item_path}: {e}")
+                except Exception as e:
+                    print(f"Error processing folder {folder}: {e}")
+                    
             time.sleep(check_interval_seconds)
 
     thread = threading.Thread(target=run_cleanup, daemon=True)

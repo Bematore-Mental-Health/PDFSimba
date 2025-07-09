@@ -1039,53 +1039,69 @@ async function renderPdfPreview(pdfUrl) {
 
 // Sign Document
 document.getElementById("signingDocumentForm").addEventListener("submit", function (e) {
-    e.preventDefault();
+  e.preventDefault();
 
-    const form = e.target;
-    const formData = new FormData(form);
+  const form = e.target;
+  const formData = new FormData(form);
+  const submitButton = form.querySelector('button[type="submit"]');
+  
+  // Store original button text
+  const originalText = submitButton.textContent;
+  
+  // Change button state
+  submitButton.disabled = true;
+  submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
 
-    fetch(`${BACKEND_URL}/upload-signing-document`, {
-        method: "POST",
-        body: formData,
-    })
-    .then((res) => {
-        if (!res.ok) {
-            return res.text().then(text => { throw new Error(text) });
-        }
-        return res.json();
-    })
+  fetch(`${BACKEND_URL}/upload-signing-document`, {
+    method: "POST",
+    body: formData,
+  })
+    .then((res) => res.json())
     .then((data) => {
-        if (data.error) {
-            alert("Error: " + data.error);
-            return;
-        }
+      if (data.error) {
+        alert("Error: " + data.error);
+        return;
+      }
 
-        // Redirect to the signing page
-        window.location.href = data.redirect_url;
+      // Open the signing editor in a new tab
+      const signingEditorUrl = `${BACKEND_URL}/sign-document/${data.document_id}`;
+      window.open(signingEditorUrl, "_blank");
+      
+      // Close the modal
+      bootstrap.Modal.getInstance(document.getElementById('uploadSigningDocumentModal')).hide();
     })
     .catch((err) => {
-        alert("Failed to upload document: " + err.message);
+      alert("Failed to upload document: " + err.message);
+    })
+    .finally(() => {
+      // Reset button state
+      submitButton.disabled = false;
+      submitButton.textContent = originalText;
     });
 });
 
   // Edit PDF 
-document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+  document.getElementById("uploadForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.innerHTML;
 
     try {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+
         const response = await fetch(`${BACKEND_URL}/upload-edit-pdf`, {
             method: "POST",
             body: formData,
             headers: {
-                'Accept': 'application/json'  // Explicitly ask for JSON
+                'Accept': 'application/json'
             }
         });
 
-        // First check if response is OK
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            throw new Error(errorData.error || `Failed to process PDF (status: ${response.status})`);
         }
 
         const result = await response.json();
@@ -1094,10 +1110,18 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
             const editorUrl = `${BACKEND_URL}/pdf-editor-view?file=${encodeURIComponent(result.pdfFileName)}`;
             window.open(editorUrl, "_blank");
         } else {
-            alert(result.error || "Failed to process PDF");
+            throw new Error(result.error || "Failed to process PDF");
         }
     } catch (error) {
-        alert("Error: " + error.message);
+        let errorMsg = error.message;
+        // Handle specific error cases
+        if (errorMsg.includes('unsupported colorspace') || errorMsg.includes('Image conversion failed')) {
+            errorMsg = "The PDF contains complex images that couldn't be processed. The document has been converted without images.";
+        }
+        alert("Error: " + errorMsg);
         console.error('Error:', error);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
     }
 });
