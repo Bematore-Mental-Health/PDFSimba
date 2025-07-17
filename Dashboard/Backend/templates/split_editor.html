@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDFSimba | Split PDF Editor</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <link rel="icon" href="../../Media/book3.png" type="image/x-icon">
+  
+  <style>
+    #pdfContainer {
+      height: 600px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+    }
+    canvas {
+      display: block;
+      margin: 10px auto;
+      border: 1px solid #ddd;
+    }
+    .download-link {
+      display: block;
+      margin-bottom: 10px;
+    }
+     /* Responsive layout changes */
+    @media (max-width: 768px) {
+      .options-column {
+        order: 1;
+        margin-bottom: 20px;
+      }
+      
+      .viewer-column {
+        order: 2;
+      }
+      
+      #pdfContainer {
+        height: 400px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container mt-4">
+    <div class="row">
+      <div class="col-md-7 viewer-column">
+        <h4>PDF Viewer</h4>
+        <div id="pdfContainer"></div>
+      </div>
+      <div class="col-md-5  options-column">
+        <h4>Split Options</h4>
+        <div class="mb-3">
+          <label for="splitAfter" class="form-label">Split after every n pages:</label>
+          <input type="number" id="splitAfter" class="form-control" placeholder="Enter n (e.g., 3)">
+        </div>
+        <div class="mb-3">
+          <label for="rangeStart" class="form-label">Save range:</label>
+          <input type="number" id="rangeStart" class="form-control mb-2" placeholder="From page">
+          <input type="number" id="rangeEnd" class="form-control" placeholder="To page">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Save specific pages:</label>
+          <input type="text" id="customPages" class="form-control" placeholder="e.g., 1,3,5 or 2-4,6">
+        </div>
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="checkbox" id="oddPages">
+          <label class="form-check-label" for="oddPages">Save odd pages only</label>
+        </div>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" id="evenPages">
+          <label class="form-check-label" for="evenPages">Save even pages only</label>
+        </div>
+        <button id="splitPDF" class="btn btn-primary">Split PDF</button>
+        <div class="mt-3" id="downloadLinks"></div>
+      </div>
+    </div>
+  </div>
+
+ <script>
+
+const BACKEND_URL = 'http://localhost:5001';
+
+    // Initialize PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    
+    // Get parameters from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const encodedFilename = urlParams.get('file');
+    const userId = urlParams.get('user_id');
+    
+    // Construct the file URL for viewing
+    const fileUrl = `/uploads/${encodedFilename}`;
+    const pdfContainer = document.getElementById("pdfContainer");
+    
+    // Track original filename for recording
+    let originalFilename = "unknown.pdf";
+    
+    const renderPDF = async (url) => {
+      try {
+        const pdf = await pdfjsLib.getDocument(url).promise;
+        pdfContainer.innerHTML = ""; // Clear previous content
+        const containerWidth = pdfContainer.clientWidth;
+
+        // Extract original filename from document info if available
+        const metadata = await pdf.getMetadata();
+        if (metadata?.info?.Title) {
+          originalFilename = metadata.info.Title + ".pdf";
+        }
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1 });
+          const scale = containerWidth / viewport.width;
+          const scaledViewport = page.getViewport({ scale });
+
+          const canvas = document.createElement("canvas");
+          canvas.width = scaledViewport.width;
+          canvas.height = scaledViewport.height;
+
+          const context = canvas.getContext("2d");
+          await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
+
+          pdfContainer.appendChild(canvas);
+        }
+      } catch (error) {
+        console.error("Error rendering PDF:", error);
+        alert("Failed to load the PDF. Please ensure the server serves the file correctly.");
+      }
+    };
+
+    // Render the PDF when page loads
+    renderPDF(fileUrl);
+
+    document.getElementById("splitPDF").addEventListener("click", () => {
+      // Get all the split options from the form
+      const splitAfter = document.getElementById("splitAfter").value;
+      const rangeStart = document.getElementById("rangeStart").value;
+      const rangeEnd = document.getElementById("rangeEnd").value;
+      const customPages = document.getElementById("customPages").value;
+      const oddPages = document.getElementById("oddPages").checked;
+      const evenPages = document.getElementById("evenPages").checked;
+
+      // Process custom pages input
+      let processedCustomPages = null;
+      if (customPages) {
+        processedCustomPages = customPages.split(',').map(item => {
+          if (item.includes('-')) {
+            const range = item.split('-').map(Number);
+            return range.length === 2 ? range : Number(item);
+          }
+          return Number(item);
+        });
+      }
+
+      // Prepare the split options
+      const splitOptions = {
+        filePath: encodedFilename,
+        splitAfter: splitAfter ? parseInt(splitAfter, 10) : null,
+        rangeStart: rangeStart ? parseInt(rangeStart, 10) : null,
+        rangeEnd: rangeEnd ? parseInt(rangeEnd, 10) : null,
+        customPages: processedCustomPages,
+        oddPages: oddPages,
+        evenPages: evenPages,
+        user_id: userId  // Add user ID for recording
+      };
+
+      const downloadLinks = document.getElementById("downloadLinks");
+      downloadLinks.innerHTML = '<div class="alert alert-info">Processing, please wait...</div>';
+
+      // Send the split request to the server
+      fetch("/split-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(splitOptions),
+      })
+      .then(response => {
+        if (!response.ok) {
+          // Record failed conversion
+          if (userId) {
+            fetch(`${BACKEND_URL}/record-conversion`, {
+              method: "POST",
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user_id: userId,
+                conversion_type: 'split_pdf',
+                original_filename: originalFilename,
+                status: 'failed',
+                error_message: "Server returned error status"
+              })
+            }).catch(e => console.error("Recording failed silently"));
+          }
+          return response.json().then(err => { throw new Error(err.error); });
+        }
+        return response.json();
+      })
+      .then(data => {
+        downloadLinks.innerHTML = '';
+        
+        if (data.output_files && data.output_files.length > 0) {
+          // Record successful conversion
+          if (userId) {
+            fetch(`${BACKEND_URL}/record-conversion`, {
+              method: "POST",
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user_id: userId,
+                conversion_type: 'split_pdf',
+                original_filename: originalFilename,
+                converted_filename: `${data.output_files.length}_split_files.zip`,
+                status: 'completed',
+                conversion_id: data.conversion_id || null,
+                num_files_generated: data.output_files.length
+              })
+            }).catch(e => console.error("Recording failed silently"));
+          }
+
+          // Create download links
+          data.output_files.forEach(file => {
+            const fileName = file.split('/').pop();
+            const linkContainer = document.createElement("div");
+            linkContainer.className = "download-link";
+            
+            const link = document.createElement("a");
+            link.href = file;
+            link.textContent = `Download ${fileName}`;
+            link.className = "btn btn-success";
+            link.download = fileName;
+            
+            // Add click handler for better download tracking
+            link.addEventListener('click', () => {
+              if (userId) {
+                fetch(`${BACKEND_URL}/record-download`, {
+                  method: "POST",
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    user_id: userId,
+                    conversion_id: data.conversion_id,
+                    filename: fileName
+                  })
+                }).catch(e => console.error("Download recording failed"));
+              }
+            });
+            
+            linkContainer.appendChild(link);
+            downloadLinks.appendChild(linkContainer);
+          });
+
+          // Add zip download option if multiple files
+          if (data.output_files.length > 1) {
+            const zipLink = document.createElement("div");
+            zipLink.className = "download-link mt-3";
+            
+            const zipBtn = document.createElement("button");
+            zipBtn.className = "btn btn-primary";
+            zipBtn.textContent = "Download All as ZIP";
+            
+            zipBtn.addEventListener('click', () => {
+              fetch(`${BACKEND_URL}/create-split-zip`, {
+                method: "POST",
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  files: data.output_files,
+                  conversion_id: data.conversion_id,
+                  user_id: userId
+                })
+              })
+              .then(response => response.json())
+              .then(zipData => {
+                const a = document.createElement('a');
+                a.href = zipData.zip_url;
+                a.download = 'split_files.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+              });
+            });
+            
+            zipLink.appendChild(zipBtn);
+            downloadLinks.appendChild(zipLink);
+          }
+        } else {
+          downloadLinks.innerHTML = '<div class="alert alert-warning">No files were generated.</div>';
+        }
+      })
+      .catch(error => {
+        console.error("Error:", error);
+        downloadLinks.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1001,6 +1001,7 @@
   </div>
 </div>
 
+
 <!-- Split PDF Modal -->
 <div class="modal fade" id="splitPDFModal" tabindex="-1" aria-labelledby="splitPDFModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg">
@@ -1214,11 +1215,11 @@
 
 
 
-
 <!-- PDF Tools JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="./JS/pdf-tools.js"></script>
+
 
 </body>
 </html>

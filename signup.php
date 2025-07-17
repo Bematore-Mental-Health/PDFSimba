@@ -86,7 +86,7 @@ $conn->close();
           <div class="col-12 d-flex align-items-center">
             <input class="form-check-input me-2" type="checkbox" name="terms" required>
             <label class="form-check-label">
-              <a href="#">Accept Terms & Conditions</a>
+              <a href="terms.php">Accept Terms & Conditions</a>
             </label>
           </div>
           <div class="col-12">

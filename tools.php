@@ -45,7 +45,7 @@
   <li class="nav-item"><a class="nav-link" href="index.php#faqs">FAQs</a></li>
       </ul>
       <div class="d-flex align-items-center">
-        <a href="index.php" class="text-dark me-3"><i class="fa-regular fa-user user-icon"></i></a>
+        <a href="signup.php" class="text-dark me-3"><i class="fa-regular fa-user user-icon"></i></a>
         <a href="tools.php" class="btn try-btn">TRY FOR FREE</a>
       </div>
     </div>

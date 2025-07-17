@@ -1,57 +1,74 @@
 // Global backend URL - change this when deploying to production
 // const BACKEND_URL = 'https://server.pdfsimba.com';
 const BACKEND_URL = 'http://localhost:5000';
-document.addEventListener("DOMContentLoaded", function () {
+
   // Word to PDF
-  const form = document.getElementById("wordToPdfForm");
-  const previewContainer = document.getElementById("previewContainer");
-  const loadingIndicator = document.getElementById("loadingIndicator");
-  const pdfPreview = document.getElementById("pdfPreview");
-  const downloadLink = document.getElementById("downloadLink");
+document.addEventListener("DOMContentLoaded", function() {
+    const form = document.getElementById("wordToPdfForm");
+    const previewContainer = document.getElementById("previewContainer");
+    const loadingIndicator = document.getElementById("loadingIndicator");
+    const pdfPreview = document.getElementById("pdfPreview");
+    const downloadLink = document.getElementById("downloadLink");
+    
 
-  
-  form.addEventListener("submit", function (e) {
-    e.preventDefault();
-
-    previewContainer.style.display = "none";
-    loadingIndicator.style.display = "block";
-
-    const formData = new FormData(form);
-
-    fetch(`${BACKEND_URL}/convert-word-to-pdf`, {
-      method: "POST",
-      body: formData,
-    })
-    .then(response => {
-      if (!response.ok) throw new Error("Failed to convert file.");
-      return response.json();
-    })
-    .then(data => {
-      const pdfUrl = `${BACKEND_URL}/` + data.pdf_path;
-
-      pdfPreview.src = pdfUrl;
-      downloadLink.href = pdfUrl;
-      downloadLink.download = "converted_file.pdf";
-
-      loadingIndicator.style.display = "none";
-      previewContainer.style.display = "block";
-
-      form.reset();
-    })
-    .catch(error => {
-      loadingIndicator.style.display = "none";
-      alert("Error: " + error.message);
+    form.addEventListener("submit", async function(e) {
+        e.preventDefault();
+        
+        // Reset UI
+        previewContainer.style.display = "none";
+        loadingIndicator.style.display = "block";
+        
+        try {
+            // Send file to backend
+            const formData = new FormData(form);
+            const response = await fetch(`${BACKEND_URL}/convert-word-to-pdf`, {
+                method: "POST",
+                body: formData
+            });
+            
+            if (!response.ok) throw new Error("Conversion failed");
+            
+            const data = await response.json();
+            const pdfUrl = `${BACKEND_URL}/${data.pdf_path}`;
+            
+            // 2. SET UP DOWNLOAD (NO REDIRECT)
+            downloadLink.onclick = async function(e) {
+                e.preventDefault();
+                const downloadResponse = await fetch(pdfUrl);
+                const blob = await downloadResponse.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'document.pdf';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            };
+            
+            // 3. SET UP PREVIEW
+            pdfPreview.src = pdfUrl;
+            
+            // Show results
+            loadingIndicator.style.display = "none";
+            previewContainer.style.display = "block";
+            
+        } catch (error) {
+            loadingIndicator.style.display = "none";
+            alert("Error: " + error.message);
+        }
     });
-  });
+
 
   // Excel to PDF
   const excelForm = document.getElementById("excelToPdfForm");
-  const excelPreviewContainer = document.getElementById("excelPreviewContainer");
-  const excelLoadingIndicator = document.getElementById("excelLoadingIndicator");
-  const excelPdfPreview = document.getElementById("excelPdfPreview");
-  const excelDownloadLink = document.getElementById("excelDownloadLink");
+const excelPreviewContainer = document.getElementById("excelPreviewContainer");
+const excelLoadingIndicator = document.getElementById("excelLoadingIndicator");
+const excelPdfPreview = document.getElementById("excelPdfPreview");
+const excelDownloadLink = document.getElementById("excelDownloadLink");
 
-  excelForm.addEventListener("submit", function (e) {
+excelForm.addEventListener("submit", function (e) {
     e.preventDefault();
 
     excelPreviewContainer.style.display = "none";
@@ -60,38 +77,54 @@ document.addEventListener("DOMContentLoaded", function () {
     const formData = new FormData(excelForm);
 
     fetch(`${BACKEND_URL}/convert-excel-to-pdf`, {
-      method: "POST",
-      body: formData,
+        method: "POST",
+        body: formData,
     })
     .then(response => {
-      if (!response.ok) throw new Error("Failed to convert Excel file.");
-      return response.json();
+        if (!response.ok) throw new Error("Failed to convert Excel file.");
+        return response.json();
     })
     .then(data => {
-      const pdfUrl = `${BACKEND_URL}/` + data.pdf_path;
-      excelPdfPreview.src = pdfUrl;
-      excelDownloadLink.href = pdfUrl;
-      excelDownloadLink.download = "converted_excel.pdf";
+        const pdfUrl = `${BACKEND_URL}/${data.pdf_path}`;
+        
+        // Set PDF preview
+        excelPdfPreview.src = pdfUrl;
+        
+        // Fix download to prevent redirect
+        excelDownloadLink.onclick = function(e) {
+            e.preventDefault();
+            fetch(pdfUrl)
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'converted_excel.pdf';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                });
+        };
 
-      excelLoadingIndicator.style.display = "none";
-      excelPreviewContainer.style.display = "block";
-
-      excelForm.reset();
+        excelLoadingIndicator.style.display = "none";
+        excelPreviewContainer.style.display = "block";
+        excelForm.reset();
     })
     .catch(error => {
-      excelLoadingIndicator.style.display = "none";
-      alert("Error: " + error.message);
+        excelLoadingIndicator.style.display = "none";
+        alert("Error: " + error.message);
     });
-  });
+});
 
   // PowerPoint to PDF
   const pptForm = document.getElementById("pptToPdfForm");
-  const pptPreviewContainer = document.getElementById("pptPreviewContainer");
-  const pptLoadingIndicator = document.getElementById("pptLoadingIndicator");
-  const pptPdfPreview = document.getElementById("pptPdfPreview");
-  const pptDownloadLink = document.getElementById("pptDownloadLink");
+const pptPreviewContainer = document.getElementById("pptPreviewContainer");
+const pptLoadingIndicator = document.getElementById("pptLoadingIndicator");
+const pptPdfPreview = document.getElementById("pptPdfPreview");
+const pptDownloadLink = document.getElementById("pptDownloadLink");
 
-  pptForm.addEventListener("submit", function (e) {
+pptForm.addEventListener("submit", function (e) {
     e.preventDefault();
 
     pptPreviewContainer.style.display = "none";
@@ -100,38 +133,58 @@ document.addEventListener("DOMContentLoaded", function () {
     const formData = new FormData(pptForm);
 
     fetch(`${BACKEND_URL}/convert-ppt-to-pdf`, {
-      method: "POST",
-      body: formData,
+        method: "POST",
+        body: formData,
     })
     .then(response => {
-      if (!response.ok) throw new Error("Failed to convert PowerPoint file.");
-      return response.json();
+        if (!response.ok) throw new Error("Failed to convert PowerPoint file.");
+        return response.json();
     })
     .then(data => {
-      const pdfUrl = `${BACKEND_URL}/` + data.pdf_path;
-      pptPdfPreview.src = pdfUrl;
-      pptDownloadLink.href = pdfUrl;
-      pptDownloadLink.download = "converted_ppt.pdf";
+        const pdfUrl = `${BACKEND_URL}/${data.pdf_path}`;
+        
+        // Set PDF preview
+        pptPdfPreview.src = pdfUrl;
+        
+        // Set up download without redirect
+        pptDownloadLink.onclick = function(e) {
+            e.preventDefault();
+            fetch(pdfUrl)
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'converted_ppt.pdf';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                })
+                .catch(error => {
+                    alert("Download failed: " + error.message);
+                });
+        };
 
-      pptLoadingIndicator.style.display = "none";
-      pptPreviewContainer.style.display = "block";
-
-      pptForm.reset();
+        pptLoadingIndicator.style.display = "none";
+        pptPreviewContainer.style.display = "block";
+        pptForm.reset();
     })
     .catch(error => {
-      pptLoadingIndicator.style.display = "none";
-      alert("Error: " + error.message);
+        pptLoadingIndicator.style.display = "none";
+        alert("Error: " + error.message);
     });
-  });
+});
+
 
   // JPG to PDF
-  const jpgForm = document.getElementById("jpgToPdfForm");
-  const jpgPreviewContainer = document.getElementById("jpgPreviewContainer");
-  const jpgLoadingIndicator = document.getElementById("jpgLoadingIndicator");
-  const jpgPdfPreview = document.getElementById("jpgPdfPreview");
-  const jpgDownloadLink = document.getElementById("jpgDownloadLink");
+ const jpgForm = document.getElementById("jpgToPdfForm");
+const jpgPreviewContainer = document.getElementById("jpgPreviewContainer");
+const jpgLoadingIndicator = document.getElementById("jpgLoadingIndicator");
+const jpgPdfPreview = document.getElementById("jpgPdfPreview");
+const jpgDownloadLink = document.getElementById("jpgDownloadLink");
 
-  jpgForm.addEventListener("submit", function (e) {
+jpgForm.addEventListener("submit", function (e) {
     e.preventDefault();
 
     jpgPreviewContainer.style.display = "none";
@@ -140,29 +193,47 @@ document.addEventListener("DOMContentLoaded", function () {
     const formData = new FormData(jpgForm);
 
     fetch(`${BACKEND_URL}/convert-jpg-to-pdf`, {
-      method: "POST",
-      body: formData,
+        method: "POST",
+        body: formData,
     })
     .then(response => {
-      if (!response.ok) throw new Error("Failed to convert JPG.");
-      return response.json();
+        if (!response.ok) throw new Error("Failed to convert JPG files.");
+        return response.json();
     })
     .then(data => {
-      const pdfUrl = `${BACKEND_URL}/` + data.pdf_path;
-      jpgPdfPreview.src = pdfUrl;
-      jpgDownloadLink.href = pdfUrl;
-      jpgDownloadLink.download = "converted_jpg.pdf";
+        const pdfUrl = `${BACKEND_URL}/${data.pdf_path}`;
+        
+        // Set PDF preview
+        jpgPdfPreview.src = pdfUrl;
+        
+        // Set up download without redirect
+        jpgDownloadLink.onclick = function(e) {
+            e.preventDefault();
+            fetch(pdfUrl)
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'converted_images.pdf';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                })
+                .catch(error => {
+                    alert("Download failed: " + error.message);
+                });
+        };
 
-      jpgLoadingIndicator.style.display = "none";
-      jpgPreviewContainer.style.display = "block";
-
-      jpgForm.reset();
+        jpgLoadingIndicator.style.display = "none";
+        jpgPreviewContainer.style.display = "block";
+        jpgForm.reset();
     })
     .catch(error => {
-      jpgLoadingIndicator.style.display = "none";
-      alert("Error: " + error.message);
+        jpgLoadingIndicator.style.display = "none";
+        alert("Error: " + error.message);
     });
-  });
 });
 
 // PDF To Word
@@ -502,114 +573,7 @@ document.getElementById("pdfToPdfaForm").addEventListener("submit", function(e) 
   });
 });
 
-
-// Merge PDF 
-document.addEventListener("DOMContentLoaded", function () {
-    const form = document.getElementById("mergePDFForm");
-    const loadingIndicator = document.getElementById("mergePDFLoading");
-    const pdfPreviewContainer = document.getElementById("pdfPreviewContainer");
-    const downloadLink = document.getElementById("downloadMergedPDF");
-    const closePreviewBtn = document.getElementById("closePreview");
-
-    // Initialize modal events
-    const mergeModal = new bootstrap.Modal(document.getElementById('mergePDFModal'));
-    
-    // Close preview handler
-    closePreviewBtn?.addEventListener("click", function() {
-        pdfPreviewContainer.style.display = "none";
-    });
-
-    form.addEventListener("submit", function (e) {
-        e.preventDefault();
-
-        // Reset UI
-        pdfPreviewContainer.style.display = "none";
-        downloadLink.style.display = "none";
-        loadingIndicator.style.display = "block";
-
-        const formData = new FormData(form);
-
-        fetch(`${BACKEND_URL}/merge-pdfs`, {
-            method: "POST",
-            body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => { throw new Error(err.error || "Failed to merge PDFs"); });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.error) throw new Error(data.error);
-
-            // Create a fresh iframe
-            const iframeContainer = pdfPreviewContainer.querySelector('.ratio');
-            iframeContainer.innerHTML = ''; 
-            
-            const newIframe = document.createElement("iframe");
-            newIframe.id = "pdfPreview";
-            newIframe.style.width = "100%";
-            newIframe.style.height = "100%";
-            newIframe.style.border = "none";
-            
-            // Set the source with cache-busting parameter
-            const pdfUrl = `${BACKEND_URL}${data.pdf_path}?t=${Date.now()}`;
-            newIframe.src = pdfUrl;
-            iframeContainer.appendChild(newIframe);
-
-            // Update UI
-            pdfPreviewContainer.style.display = "block";
-            downloadLink.href = pdfUrl;
-            downloadLink.download = data.filename || "merged.pdf";
-            downloadLink.style.display = "inline-block";
-            
-            // Ensure modal is properly shown
-            mergeModal.show();
-        })
-        .catch(error => {
-            console.error("Error:", error);
-            alert("Error: " + error.message);
-        })
-        .finally(() => {
-            loadingIndicator.style.display = "none";
-        });
-    });
-});
-
-
-// Split PDFs
-document.addEventListener("DOMContentLoaded", function () {
-    const form = document.getElementById("splitPDFForm");
-
-    form.addEventListener("submit", function (e) {
-        e.preventDefault();
-
-        const formData = new FormData(form);
-        fetch(`${BACKEND_URL}/upload-pdf`, {
-            method: "POST",
-            body: formData,
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) throw new Error(data.error);
-
-            // Encode the filename for URL
-            const encodedFilename = encodeURIComponent(data.file_path);
-            const editorUrl = `${BACKEND_URL}/split-editor?file=${encodedFilename}`;
-            window.open(editorUrl, "_blank");
-        })
-        .catch(error => {
-            console.error("Upload error:", error);
-            alert("Error: " + error.message);
-        });
-    });
-});
-
 // Protect PDF
-// Use the global BACKEND_URL
 
 document.getElementById("protectPDFForm").addEventListener("submit", function (e) {
   e.preventDefault();
@@ -717,9 +681,99 @@ document.getElementById("unlockPDFForm").addEventListener("submit", function(e) 
   });
 });
 
+
+// Sign Document
+document.getElementById("signingDocumentForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  const form = e.target;
+  const formData = new FormData(form);
+  const submitButton = form.querySelector('button[type="submit"]');
+  
+  // Store original button text
+  const originalText = submitButton.textContent;
+  
+  // Change button state
+  submitButton.disabled = true;
+  submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+
+  fetch(`${BACKEND_URL}/upload-signing-document`, {
+    method: "POST",
+    body: formData,
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.error) {
+        alert("Error: " + data.error);
+        return;
+      }
+
+      // Open the signing editor in a new tab
+      const signingEditorUrl = `${BACKEND_URL}/sign-document/${data.document_id}`;
+      window.open(signingEditorUrl, "_blank");
+      
+      // Close the modal
+      bootstrap.Modal.getInstance(document.getElementById('uploadSigningDocumentModal')).hide();
+    })
+    .catch((err) => {
+      alert("Failed to upload document: " + err.message);
+    })
+    .finally(() => {
+      // Reset button state
+      submitButton.disabled = false;
+      submitButton.textContent = originalText;
+    });
+});
+
+  // Edit PDF 
+  document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.innerHTML;
+
+    try {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+
+        const response = await fetch(`${BACKEND_URL}/upload-edit-pdf`, {
+            method: "POST",
+            body: formData,
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to process PDF (status: ${response.status})`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            const editorUrl = `${BACKEND_URL}/pdf-editor-view?file=${encodeURIComponent(result.pdfFileName)}`;
+            window.open(editorUrl, "_blank");
+        } else {
+            throw new Error(result.error || "Failed to process PDF");
+        }
+    } catch (error) {
+        let errorMsg = error.message;
+        // Handle specific error cases
+        if (errorMsg.includes('unsupported colorspace') || errorMsg.includes('Image conversion failed')) {
+            errorMsg = "The PDF contains complex images that couldn't be processed. The document has been converted without images.";
+        }
+        alert("Error: " + errorMsg);
+        console.error('Error:', error);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+    }
+  });
+});
+
 // iWork to PDF 
 document.addEventListener('DOMContentLoaded', function() {
-  const BACKEND_URL = 'http://localhost:5000';
   const fileInput = document.getElementById('iworkFileInput');
   const fileInfo = document.getElementById('fileInfo');
   const fileName = document.getElementById('fileName');
@@ -855,10 +909,7 @@ loadingTask.promise.then(function(pdf) {
   convertAnotherBtn.addEventListener('click', resetConversionUI);
 });
 
-
-// eBooks to PDF
 document.addEventListener('DOMContentLoaded', function() {
-  const BACKEND_URL = 'http://localhost:5000';
   const ebookTool = document.querySelector('.ebook-tool-box');
   const ebookFileInput = document.getElementById('ebookFileInput');
   const ebookFileInfo = document.getElementById('ebookFileInfo');
@@ -1037,91 +1088,125 @@ async function renderPdfPreview(pdfUrl) {
 });
 
 
-// Sign Document
-document.getElementById("signingDocumentForm").addEventListener("submit", function (e) {
-  e.preventDefault();
+// Merge PDF 
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("mergePDFForm");
+    const loadingIndicator = document.getElementById("mergePDFLoading");
+    const pdfPreviewContainer = document.getElementById("pdfPreviewContainer");
+    const downloadLink = document.getElementById("downloadMergedPDF");
+    const closePreviewBtn = document.getElementById("closePreview");
 
-  const form = e.target;
-  const formData = new FormData(form);
-  const submitButton = form.querySelector('button[type="submit"]');
-  
-  // Store original button text
-  const originalText = submitButton.textContent;
-  
-  // Change button state
-  submitButton.disabled = true;
-  submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
-
-  fetch(`${BACKEND_URL}/upload-signing-document`, {
-    method: "POST",
-    body: formData,
-  })
-    .then((res) => res.json())
-    .then((data) => {
-      if (data.error) {
-        alert("Error: " + data.error);
-        return;
-      }
-
-      // Open the signing editor in a new tab
-      const signingEditorUrl = `${BACKEND_URL}/sign-document/${data.document_id}`;
-      window.open(signingEditorUrl, "_blank");
-      
-      // Close the modal
-      bootstrap.Modal.getInstance(document.getElementById('uploadSigningDocumentModal')).hide();
-    })
-    .catch((err) => {
-      alert("Failed to upload document: " + err.message);
-    })
-    .finally(() => {
-      // Reset button state
-      submitButton.disabled = false;
-      submitButton.textContent = originalText;
+    // Initialize modal events
+    const mergeModal = new bootstrap.Modal(document.getElementById('mergePDFModal'));
+    
+    // Close preview handler
+    closePreviewBtn?.addEventListener("click", function() {
+        pdfPreviewContainer.style.display = "none";
     });
-});
 
-  // Edit PDF 
-  document.getElementById("uploadForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    const originalBtnText = submitBtn.innerHTML;
+    // Handle download click
+    downloadLink?.addEventListener("click", function(e) {
+        e.preventDefault();
+        const downloadUrl = this.href;
+        
+        // Create a hidden iframe to trigger download
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = downloadUrl;
+        document.body.appendChild(iframe);
+        
+        // Clean up after download starts
+        setTimeout(() => {
+            document.body.removeChild(iframe);
+        }, 1000);
+    });
 
-    try {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
 
-        const response = await fetch(`${BACKEND_URL}/upload-edit-pdf`, {
+        // Reset UI
+        pdfPreviewContainer.style.display = "none";
+        downloadLink.style.display = "none";
+        loadingIndicator.style.display = "block";
+
+        const formData = new FormData(form);
+
+        fetch(`${BACKEND_URL}/merge-pdfs`, {
             method: "POST",
             body: formData,
             headers: {
-                'Accept': 'application/json'
+                'X-Requested-With': 'XMLHttpRequest'
             }
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw new Error(err.error || "Failed to merge PDFs"); });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+
+            // Create a fresh iframe
+            const iframeContainer = pdfPreviewContainer.querySelector('.ratio');
+            iframeContainer.innerHTML = ''; 
+            
+            const newIframe = document.createElement("iframe");
+            newIframe.id = "pdfPreview";
+            newIframe.style.width = "100%";
+            newIframe.style.height = "100%";
+            newIframe.style.border = "none";
+            
+            // Set the source with cache-busting parameter
+            const pdfUrl = `${BACKEND_URL}${data.pdf_path}?t=${Date.now()}`;
+            newIframe.src = pdfUrl;
+            iframeContainer.appendChild(newIframe);
+
+            // Update UI
+            pdfPreviewContainer.style.display = "block";
+            downloadLink.href = `${BACKEND_URL}${data.pdf_path}?download=true`; // Add download flag
+            downloadLink.download = data.filename || "merged.pdf";
+            downloadLink.style.display = "inline-block";
+            
+            // Ensure modal is properly shown
+            mergeModal.show();
+        })
+        .catch(error => {
+            console.error("Error:", error);
+            alert("Error: " + error.message);
+        })
+        .finally(() => {
+            loadingIndicator.style.display = "none";
         });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Failed to process PDF (status: ${response.status})`);
-        }
-
-        const result = await response.json();
-
-        if (result.success) {
-            const editorUrl = `${BACKEND_URL}/pdf-editor-view?file=${encodeURIComponent(result.pdfFileName)}`;
-            window.open(editorUrl, "_blank");
-        } else {
-            throw new Error(result.error || "Failed to process PDF");
-        }
-    } catch (error) {
-        let errorMsg = error.message;
-        // Handle specific error cases
-        if (errorMsg.includes('unsupported colorspace') || errorMsg.includes('Image conversion failed')) {
-            errorMsg = "The PDF contains complex images that couldn't be processed. The document has been converted without images.";
-        }
-        alert("Error: " + errorMsg);
-        console.error('Error:', error);
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalBtnText;
-    }
+    });
 });
+
+// Split PDFs
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("splitPDFForm");
+
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+        fetch(`${BACKEND_URL}/upload-pdf`, {
+            method: "POST",
+            body: formData,
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+
+            // Encode the filename for URL
+            const encodedFilename = encodeURIComponent(data.file_path);
+            const editorUrl = `${BACKEND_URL}/split-editor?file=${encodedFilename}`;
+            window.open(editorUrl, "_blank");
+        })
+        .catch(error => {
+            console.error("Upload error:", error);
+            alert("Error: " + error.message);
+        });
+    });
+});
+
+

@@ -126,13 +126,57 @@ def convert_ppt_route():
 # JPG/PNG to PDF
 @app.route('/convert-jpg-to-pdf', methods=['POST'])
 def convert_jpg_route():
-    return convert_jpg_file()
+    files = request.files.getlist('jpg_file')
+    if not files or len(files) == 0:
+        return jsonify({'error': 'No files uploaded'}), 400
+
+    images = []
+    temp_files = []
+
+    try:
+        for file in files:
+            ext = os.path.splitext(file.filename)[1].lower()
+            if ext not in ['.jpg', '.jpeg', '.png']:
+                return jsonify({'error': f'Unsupported file: {file.filename}'}), 400
+
+            # Create temp file path
+            filename = f"{uuid.uuid4()}{ext}"
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
+            temp_files.append(filepath)
+
+            # Open and convert to RGB
+            img = Image.open(filepath).convert("RGB")
+            images.append(img)
+
+        if not images:
+            return jsonify({'error': 'No valid images found'}), 400
+
+        pdf_filename = f"{uuid.uuid4()}.pdf"
+        pdf_filepath = os.path.join(OUTPUT_FOLDER, pdf_filename)
+
+        # Save all images into one PDF
+        images[0].save(
+            pdf_filepath,
+            save_all=True,
+            append_images=images[1:],
+            quality=100,
+            optimize=True
+        )
+
+        return jsonify({'pdf_path': f"converted/{pdf_filename}"})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        # Clean up temporary files
+        for temp_file in temp_files:
+            try:
+                os.remove(temp_file)
+            except:
+                pass
 
 
-# Serve converted PDF files
-@app.route('/converted/<path:filename>')
-def serve_pdf(filename):
-    return send_from_directory(OUTPUT_FOLDER, filename)
 
 # PDF To Word
 @app.route('/convert-pdf-to-word', methods=['POST'])
@@ -167,9 +211,10 @@ def edit_word_document(filename):
       <div class="container">
         <div class="editor-container">
           <h3 class="mb-4">Edit Your Word Document</h3>
-          <button class="btn btn-success" type="submit">Save and Download</button> 
           <br>
           <form method="POST" action="/save-edited-word/{filename}">
+          <button class="btn btn-success" type="submit">Save and Download</button> 
+
             <textarea id="editor" name="content"></textarea>
             <br>
             
@@ -214,8 +259,7 @@ def save_edited_word(filename):
         return send_from_directory(OUTPUT_FOLDER, os.path.basename(output_docx), as_attachment=True)
     except Exception as e:
         return f"Error saving Word file: {str(e)}", 500
-
-
+        
 # PDF to Excel
 @app.route('/convert-pdf-to-excel', methods=['POST'])
 def convert_pdf_to_excel():
@@ -249,9 +293,10 @@ def convert_pdf_to_excel():
 def download_excel(filename):
     return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
 
-@app.route('/converted/<filename>')
-def serve_excel_for_preview(filename):
-    return send_from_directory(OUTPUT_FOLDER, filename)
+@app.route('/converted/<path:filename>')
+def serve_pdf(filename):
+    return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
+
 
 
 @app.route('/excel-editor/<filename>')
@@ -543,26 +588,26 @@ def download_merged_pdf(filename):
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File {filename} not found")
             
-        # Send file with proper headers for inline display
-        response = make_response(send_file(
-            file_path,
-            mimetype='application/pdf',
-            as_attachment=False, 
-            download_name=filename
-        ))
-        
-        # Disable caching
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        
-        return response
+        # Check if download parameter is present
+        if request.args.get('download'):
+            return send_file(
+                file_path,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=filename
+            )
+        else:
+            # For preview purposes
+            return send_file(
+                file_path,
+                mimetype='application/pdf',
+                as_attachment=False
+            )
     except Exception as e:
         app.logger.error(f"Error serving merged PDF: {str(e)}")
         return jsonify({'error': str(e)}), 404
 
-
+        
 # Split PDFs
 @app.route('/upload-pdf', methods=['POST'])
 def upload_pdf():
@@ -977,27 +1022,8 @@ def serve_ebook_pdf(filename):
     except FileNotFoundError:
         return jsonify({'success': False, 'message': 'PDF file not found'}), 404
 
-
 # Sign Document 
 import comtypes.client
-import os
-
-def convert_office_to_pdf(input_path, output_path):
-    ext = os.path.splitext(input_path)[1].lower()
-    if ext not in ['.doc', '.docx']:
-        raise ValueError("Unsupported file type for conversion")
-
-    comtypes.CoInitialize()
-    word = comtypes.client.CreateObject('Word.Application')
-    word.Visible = False
-
-    try:
-        doc = word.Documents.Open(input_path)
-        doc.SaveAs(output_path, FileFormat=17)  # 17 = wdFormatPDF
-        doc.Close()
-    finally:
-        word.Quit()
-        comtypes.CoUninitialize()
 
 
 @app.route('/upload-signing-document', methods=['POST'])
@@ -1008,28 +1034,84 @@ def upload_signing_document():
 
     filename = secure_filename(file.filename)
     file_ext = os.path.splitext(filename)[1].lower()
-    file_path = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(file_path)
+    
+    # Create a unique filename to avoid conflicts
+    unique_id = str(uuid.uuid4())
+    temp_filename = f"{unique_id}{file_ext}"
+    temp_path = os.path.join(UPLOAD_FOLDER, temp_filename)
+    file.save(temp_path)
 
-    # Convert Word to PDF
+    # Convert Word to PDF if needed
     if file_ext in ['.doc', '.docx']:
-        pdf_filename = os.path.splitext(filename)[0] + '.pdf'
+        pdf_filename = f"{unique_id}.pdf"
         pdf_path = os.path.join(UPLOAD_FOLDER, pdf_filename)
-
+        
+        # Try multiple conversion methods with fallbacks
+        conversion_success = False
+        
+        # Method 1: Try LibreOffice first (fastest)
         try:
-            convert_office_to_pdf(file_path, pdf_path)
-            os.remove(file_path)  # Remove the Word file
-            return jsonify({"document_id": pdf_filename})
+            result = subprocess.run(
+                ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', UPLOAD_FOLDER, temp_path],
+                capture_output=True,
+                text=True,
+                timeout=60  # 60 second timeout
+            )
+            if result.returncode == 0:
+                conversion_success = True
+                # LibreOffice creates output with same name but .pdf extension
+                temp_pdf_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}.pdf")
+                if os.path.exists(temp_pdf_path):
+                    os.rename(temp_pdf_path, pdf_path)
         except Exception as e:
-            print("Word to PDF conversion error:", e)
-            return jsonify({"error": "Failed to convert Word document"}), 500
+            app.logger.error(f"LibreOffice conversion failed: {str(e)}")
+
+        # Method 2: Try docx2pdf if LibreOffice failed
+        if not conversion_success:
+            try:
+                from docx2pdf import convert
+                convert(temp_path, pdf_path)
+                conversion_success = True
+            except Exception as e:
+                app.logger.error(f"docx2pdf conversion failed: {str(e)}")
+
+        # Method 3: Fallback to Word COM if other methods fail
+        if not conversion_success:
+            try:
+                comtypes.CoInitialize()
+                word = comtypes.client.CreateObject('Word.Application')
+                word.Visible = False
+                doc = word.Documents.Open(temp_path)
+                doc.SaveAs(pdf_path, FileFormat=17)  # 17 = wdFormatPDF
+                doc.Close()
+                word.Quit()
+                conversion_success = True
+            except Exception as e:
+                app.logger.error(f"Word COM conversion failed: {str(e)}")
+                return jsonify({"error": "Failed to convert Word document"}), 500
+            finally:
+                comtypes.CoUninitialize()
+
+        # Clean up original Word file
+        os.remove(temp_path)
+        
+        if not conversion_success:
+            return jsonify({"error": "All conversion methods failed"}), 500
+            
+        return jsonify({"document_id": pdf_filename})
 
     # Handle actual PDF uploads
     elif file_ext == '.pdf':
-        return jsonify({"document_id": filename})
+        # Rename to our unique filename
+        final_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}.pdf")
+        os.rename(temp_path, final_path)
+        return jsonify({"document_id": f"{unique_id}.pdf"})
     
+    # Unsupported file type
+    os.remove(temp_path)
     return jsonify({"error": "Unsupported file type"}), 400
 
+    
 @app.route('/sign-document/<document_id>')
 def sign_document(document_id):
     document_path = os.path.join(UPLOAD_FOLDER, document_id)
@@ -1924,11 +2006,15 @@ def save_edited_pdf():
         clean_file_id = secure_filename(file_id)
         unique_id = clean_file_id.split('_')[0]
         
-        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}.docx")
-        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], clean_file_id)
-
+        # Create temporary directory for processing
+        temp_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{unique_id}")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        temp_docx_path = os.path.join(temp_dir, f"{unique_id}.docx")
+        temp_pdf_path = os.path.join(temp_dir, clean_file_id)
+        
         # Create images directory
-        images_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_images")
+        images_dir = os.path.join(temp_dir, f"{unique_id}_images")
         os.makedirs(images_dir, exist_ok=True)
 
         # Create a new document with styles
@@ -1960,30 +2046,91 @@ def save_edited_pdf():
             elif element.name == 'table':
                 process_table(element, doc, images_dir)
 
-        # Save the DOCX file
-        doc.save(docx_path)
-
-        # Convert DOCX to PDF using Word
-        pythoncom.CoInitialize()
+        # Save the DOCX file with error handling
         try:
-            word = Dispatch('Word.Application')
-            word.Visible = False
-            word.DisplayAlerts = False
-            
-            doc = word.Documents.Open(os.path.abspath(docx_path))
-            doc.SaveAs(os.path.abspath(pdf_path), FileFormat=17)
-            doc.Close(False)
-            word.Quit()
+            doc.save(temp_docx_path)
         except Exception as e:
-            app.logger.error(f"PDF conversion failed: {str(e)}\n{traceback.format_exc()}")
-            return jsonify({'error': f'PDF conversion failed: {str(e)}'}), 500
-        finally:
-            pythoncom.CoUninitialize()
+            app.logger.error(f"Error saving DOCX: {str(e)}")
+            # Try again with a different filename if first attempt fails
+            temp_docx_path = os.path.join(temp_dir, f"{unique_id}_alt.docx")
+            doc.save(temp_docx_path)
+
+        # Convert DOCX to PDF using multiple methods with fallbacks
+        final_pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], clean_file_id)
+        success = False
+        error_msg = None
+        
+        # Method 1: Try LibreOffice first (terminal command)
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', temp_dir, temp_docx_path],
+                capture_output=True,
+                text=True,
+                timeout=180  # 60 second timeout
+            )
+            if result.returncode == 0:
+                success = True
+                app.logger.info("LibreOffice conversion succeeded")
+            else:
+                error_msg = f"LibreOffice failed: {result.stderr}"
+                app.logger.error(error_msg)
+        except Exception as e:
+            error_msg = f"LibreOffice conversion failed: {str(e)}"
+            app.logger.error(error_msg)
+
+        # Method 2: Fallback to Word COM if LibreOffice fails
+        if not success:
+            try:
+                pythoncom.CoInitialize()
+                word = Dispatch('Word.Application')
+                word.Visible = False
+                word.DisplayAlerts = False
+                
+                doc = word.Documents.Open(os.path.abspath(temp_docx_path))
+                doc.SaveAs(os.path.abspath(temp_pdf_path), FileFormat=17)
+                doc.Close(False)
+                word.Quit()
+                success = True
+            except Exception as e:
+                error_msg = f"Word COM conversion failed: {str(e)}"
+                app.logger.error(error_msg)
+            finally:
+                pythoncom.CoUninitialize()
+
+        # Method 3: Final fallback to docx2pdf if other methods fail
+        if not success:
+            try:
+                from docx2pdf import convert
+                convert(temp_docx_path, temp_pdf_path)
+                success = True
+            except Exception as e:
+                error_msg = f"docx2pdf conversion failed: {str(e)}"
+                app.logger.error(error_msg)
+
+        if not success:
+            raise Exception(f"All PDF conversion methods failed. Last error: {error_msg}")
+
+        # Verify PDF was created
+        if not os.path.exists(temp_pdf_path):
+            temp_pdf_path = os.path.join(temp_dir, f"{unique_id}.pdf")  # Try default output name
+            if not os.path.exists(temp_pdf_path):
+                raise Exception("PDF file was not created by any conversion method")
+
+        # Move the final PDF to the uploads folder
+        shutil.move(temp_pdf_path, final_pdf_path)
+        
+        # Clean up temporary files
+        try:
+            shutil.rmtree(temp_dir)
+        except Exception as e:
+            app.logger.error(f"Error cleaning up temp files: {str(e)}")
 
         return jsonify({'success': True, 'pdfUrl': clean_file_id})
     except Exception as e:
         app.logger.error(f"Error saving PDF: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
+
 
 def process_element(element, para, images_dir):
     """Process HTML element with comprehensive style and content handling"""
@@ -2289,7 +2436,18 @@ def cleanup_old_files(folder_paths, max_age_minutes=120, check_interval_seconds=
     def run_cleanup():
         while True:
             now = time.time()
+            # Get the directory where app.py is located
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            # Process both the original paths and the paths relative to app.py
+            all_paths = []
             for folder in folder_paths:
+                # Add the original path (parent directory)
+                all_paths.append(folder)
+                # Add the path relative to app.py's directory
+                all_paths.append(os.path.join(current_dir, folder))
+            
+            for folder in all_paths:
                 try:
                     # Skip if folder doesn't exist
                     if not os.path.exists(folder):
@@ -2320,6 +2478,8 @@ def cleanup_old_files(folder_paths, max_age_minutes=120, check_interval_seconds=
     thread = threading.Thread(target=run_cleanup, daemon=True)
     thread.start()
 
+
+    
 # Default route to display welcome page
 @app.route('/')
 def welcome():
