@@ -3,40 +3,196 @@ include './DashboardBackend/session.php';
 include './DashboardBackend/db_connection.php';
 
 $errorMsg = "";
+$showVerificationModal = false;
+$verificationError = "";
+
+// SMTP Configuration
+$smtpHost = 'smtp.gmail.com';
+$smtpPort = 587;
+$smtpUsername = 'systempdfsimba@gmail.com';
+$smtpPassword = 'srwvpiti ksogqlnv'; // Your app password (remove space if needed)
+$fromEmail = 'systempdfsimba@gmail.com';
+$fromName = 'PDFSimba';
+
+function sendVerificationEmail($toEmail, $firstName, $verificationCode) {
+    global $smtpHost, $smtpPort, $smtpUsername, $smtpPassword, $fromEmail, $fromName;
+    
+    $subject = "PDFSimba - Verify Your Email";
+    $body = "Hello $firstName,\n\n";
+    $body .= "Your verification code is: $verificationCode\n\n";
+    $body .= "This code will expire in 1 hour.\n\n";
+    $body .= "Enter this code to complete your registration.\n\n";
+    $body .= "If you didn't request this, please ignore this email.";
+    
+    // Create email headers
+    $headers = [
+        'From' => "$fromName <$fromEmail>",
+        'To' => $toEmail,
+        'Subject' => $subject,
+        'Date' => date('r'),
+        'MIME-Version' => '1.0',
+        'Content-type' => 'text/plain; charset=utf-8'
+    ];
+    
+    // Format headers
+    $headersString = '';
+    foreach ($headers as $key => $value) {
+        $headersString .= "$key: $value\r\n";
+    }
+    
+    // Open socket connection
+    $socket = fsockopen($smtpHost, $smtpPort, $errno, $errstr, 30);
+    
+    if (!$socket) {
+        return false;
+    }
+    
+    // SMTP Conversation
+    $welcome = fread($socket, 4096);
+    fwrite($socket, "EHLO localhost\r\n");
+    fread($socket, 4096);
+    
+    fwrite($socket, "STARTTLS\r\n");
+    fread($socket, 4096);
+    
+    if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT)) {
+        fclose($socket);
+        return false;
+    }
+    
+    fwrite($socket, "EHLO localhost\r\n");
+    fread($socket, 4096);
+    
+    fwrite($socket, "AUTH LOGIN\r\n");
+    fread($socket, 4096);
+    
+    fwrite($socket, base64_encode($smtpUsername) . "\r\n");
+    fread($socket, 4096);
+    
+    fwrite($socket, base64_encode($smtpPassword) . "\r\n");
+    $authResponse = fread($socket, 4096);
+    
+    if (strpos($authResponse, '235') === false) {
+        fclose($socket);
+        return false;
+    }
+    
+    fwrite($socket, "MAIL FROM: <$fromEmail>\r\n");
+    fread($socket, 4096);
+    
+    fwrite($socket, "RCPT TO: <$toEmail>\r\n");
+    fread($socket, 4096);
+    
+    fwrite($socket, "DATA\r\n");
+    fread($socket, 4096);
+    
+    fwrite($socket, "$headersString\r\n$body\r\n.\r\n");
+    $sendResponse = fread($socket, 4096);
+    
+    fwrite($socket, "QUIT\r\n");
+    fclose($socket);
+    
+    return strpos($sendResponse, '250') !== false;
+}
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $firstName = trim($_POST['first_name']);
-    $lastName = trim($_POST['last_name']);
-    $email = trim($_POST['email']);
-    $password = $_POST['password'];
-    $terms = isset($_POST['terms']) ? 1 : 0;
-
-    if(empty($firstName) || empty($lastName) || empty($email) || empty($password) || !$terms){
-        $errorMsg = "All fields are required and terms must be accepted.";
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errorMsg = "Invalid email format.";
-    } else {
-        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
-        $stmt->bind_param("s", $email);
+    // Handle verification code submission
+    if (isset($_POST['verify_code'])) {
+        $enteredCode = trim($_POST['verification_code']);
+        $email = $_SESSION['temp_email'];
+        
+        // Verify code against database with expiry check
+        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ? AND verification_code = ? AND verification_code_expiry > NOW()");
+        $stmt->bind_param("ss", $email, $enteredCode);
         $stmt->execute();
         $stmt->store_result();
-
-        if($stmt->num_rows > 0){
-            $errorMsg = "Email is already registered.";
-        } else {
-            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $conn->prepare("INSERT INTO users (first_name, last_name, email, password) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("ssss", $firstName, $lastName, $email, $hashedPassword);
-
-            if($stmt->execute()){
-                // Redirect to login page after successful signup
+        
+        if ($stmt->num_rows > 0) {
+            // Update user as verified
+            $updateStmt = $conn->prepare("UPDATE users SET is_verified = 1, verification_code = NULL, verification_code_expiry = NULL WHERE email = ?");
+            $updateStmt->bind_param("s", $email);
+            
+            if ($updateStmt->execute()) {
+                // Clean up session
+                unset($_SESSION['temp_email']);
+                unset($_SESSION['verification_code']);
+                
+                // Redirect to login
                 header("Location: login.php?signup=success");
                 exit();
             } else {
-                $errorMsg = "Something went wrong. Please try again.";
+                $verificationError = "Database update failed. Please try again.";
             }
+            $updateStmt->close();
+        } else {
+            // Check if code exists but expired
+            $expiredStmt = $conn->prepare("SELECT id FROM users WHERE email = ? AND verification_code = ? AND verification_code_expiry <= NOW()");
+            $expiredStmt->bind_param("ss", $email, $enteredCode);
+            $expiredStmt->execute();
+            $expiredStmt->store_result();
+            
+            if ($expiredStmt->num_rows > 0) {
+                $verificationError = "Verification code has expired. Please request a new one.";
+            } else {
+                $verificationError = "Invalid verification code. Please try again.";
+            }
+            $expiredStmt->close();
+            $showVerificationModal = true;
         }
         $stmt->close();
+    } 
+    // Handle initial signup
+    else {
+        $firstName = trim($_POST['first_name']);
+        $lastName = trim($_POST['last_name']);
+        $email = trim($_POST['email']);
+        $password = $_POST['password'];
+        $terms = isset($_POST['terms']) ? 1 : 0;
+
+        if (empty($firstName) || empty($lastName) || empty($email) || empty($password) || !$terms) {
+            $errorMsg = "All fields are required and terms must be accepted.";
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errorMsg = "Invalid email format.";
+        } else {
+            // Check if email exists
+            $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+            $stmt->bind_param("s", $email);
+            $stmt->execute();
+            $stmt->store_result();
+
+            if ($stmt->num_rows > 0) {
+                $errorMsg = "Email is already registered.";
+            } else {
+                // Generate verification code
+                $verificationCode = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+                $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+                
+                // Calculate expiry time (1 hour from now)
+                $expiryTime = date('Y-m-d H:i:s', strtotime('+1 hour'));
+                
+                // Insert user with verification code and expiry time
+                $insertStmt = $conn->prepare("INSERT INTO users (first_name, last_name, email, password, created_at, verification_code, verification_code_expiry, is_verified, updated_at) VALUES (?, ?, ?, ?, NOW(), ?, ?, 0, NOW())");
+                $insertStmt->bind_param("ssssss", $firstName, $lastName, $email, $hashedPassword, $verificationCode, $expiryTime);
+                
+                if ($insertStmt->execute()) {
+                    // Store email in session for verification
+                    $_SESSION['temp_email'] = $email;
+                    
+                    // Send verification email using SMTP
+                    if (sendVerificationEmail($email, $firstName, $verificationCode)) {
+                        $showVerificationModal = true;
+                    } else {
+                        $errorMsg = "Failed to send verification email. Please try again.";
+                        // Rollback the insertion
+                        $conn->query("DELETE FROM users WHERE email = '$email'");
+                    }
+                } else {
+                    $errorMsg = "Database error. Please try again.";
+                }
+                $insertStmt->close();
+            }
+            $stmt->close();
+        }
     }
 }
 $conn->close();
@@ -100,5 +256,40 @@ $conn->close();
     </div>
   </div>
 
+  <!-- Verification Modal -->
+  <div class="modal fade" id="verificationModal" tabindex="-1" aria-hidden="true" style="<?= $showVerificationModal ? 'display: block; background-color: rgba(0,0,0,0.5);' : 'display: none;' ?>">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Verify Your Email</h5>
+        </div>
+        <div class="modal-body">
+          <?php if ($verificationError): ?>
+            <div class="alert alert-danger"><?= $verificationError ?></div>
+          <?php endif; ?>
+          <p>We've sent a 6-digit verification code to <strong><?= htmlspecialchars($_SESSION['temp_email'] ?? '') ?></strong>.</p>
+          <p class="text-muted small">This code will expire in 1 hour.</p>
+          <form method="post">
+            <div class="mb-3">
+              <label for="verification_code" class="form-label">Verification Code</label>
+              <input type="text" class="form-control" id="verification_code" name="verification_code" required maxlength="6" pattern="\d{6}" title="Please enter a 6-digit code">
+            </div>
+            <button type="submit" name="verify_code" class="btn btn-primary">Verify</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Show modal if verification is needed
+    <?php if ($showVerificationModal): ?>
+      document.addEventListener('DOMContentLoaded', function() {
+        var modal = new bootstrap.Modal(document.getElementById('verificationModal'));
+        modal.show();
+      });
+    <?php endif; ?>
+  </script>
 </body>
 </html>
