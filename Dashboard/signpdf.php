@@ -22,12 +22,12 @@ try {
     $user_id = $_SESSION['user_id'] ?? null;
     if (!$user_id) die("Login required");
 
-    // Get documents from last 48 hours
+    // Get documents from last 48 hours that are either pending or uploaded
     $fortyEightHoursAgo = date('Y-m-d H:i:s', strtotime('-48 hours'));
     $stmt = $db->prepare('SELECT * FROM conversions 
                          WHERE user_id = :user_id 
-                         AND conversion_type = "document_signing" 
-                         AND status != "completed" 
+                         AND (conversion_type = "document_signing" OR conversion_type = "document_signing_upload")
+                         AND status IN ("uploaded", "pending", "processing")
                          AND timestamp > :fortyEightHoursAgo 
                          ORDER BY timestamp DESC');
     $stmt->bindValue(':user_id', $user_id, SQLITE3_TEXT);
@@ -79,6 +79,8 @@ try {
         .badge.completed { background-color: #28a745; }
         .badge.failed { background-color: #dc3545; }
         .badge.uploaded { background-color: #17a2b8; }
+        .badge.pending { background-color: #ffc107; color: #000; }
+        .badge.processing { background-color: #007bff; }
         .expiry-notice {
             background-color: #fff3cd;
             border-left: 4px solid #ffc107;
@@ -108,8 +110,9 @@ try {
     <?php else: ?>
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-4">
             <?php foreach ($documents as $doc): 
-                // Always use converted_filename if available, otherwise original_filename
+                // Determine which file to use for signing
                 $documentFile = !empty($doc['converted_filename']) ? $doc['converted_filename'] : $doc['original_filename'];
+                $statusClass = strtolower($doc['status']);
             ?>
                 <div class="col">
                     <div class="card document-card">
@@ -121,11 +124,15 @@ try {
                             <p class="card-text text-muted small">
                                 <?= date('M d, Y H:i', strtotime($doc['timestamp'])) ?>
                             </p>
-                            <span class="badge <?= $doc['status'] ?> mb-2">
+                            <span class="badge <?= $statusClass ?> mb-2">
                                 <?= ucfirst($doc['status']) ?>
                             </span>
                             <div class="d-grid gap-2">
-                              
+                                <button class="btn btn-sm btn-outline-primary sign-document-btn" 
+                                        data-document-id="<?= htmlspecialchars($documentFile) ?>"
+                                        data-conversion-id="<?= htmlspecialchars($doc['conversion_id']) ?>">
+                                    <i class="bi bi-pen"></i> Sign Document
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -247,6 +254,19 @@ if (signingDocumentForm) {
         });
     });
 }
+
+// Handle sign document buttons
+document.querySelectorAll('.sign-document-btn').forEach(button => {
+    button.addEventListener('click', function() {
+        const documentId = this.getAttribute('data-document-id');
+        const conversionId = this.getAttribute('data-conversion-id');
+        const userId = document.getElementById('currentUserId').value;
+        
+        // Open the signing editor in a new tab
+        const signingEditorUrl = `${BACKEND_URL}/sign-document/${documentId}?user_id=${userId}&conversion_id=${conversionId || ''}`;
+        window.open(signingEditorUrl, "_blank");
+    });
+});
 </script>
 </body>
 </html>

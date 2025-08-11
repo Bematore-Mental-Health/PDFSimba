@@ -90,7 +90,7 @@
         $('#filename-display').text(justFileName.split('_').slice(1).join('_'));
 
         // Initialize Summernote with enhanced features
-       $('#summernote').summernote({
+ $('#summernote').summernote({
     height: '100%',
     styleTags: ['p', 'blockquote', 'pre', 'h1', 'h2', 'h3'],
     toolbar: [
@@ -110,36 +110,54 @@
         },
         onInit: function() {
             loadInitialContent(justFileName);
+        },
+        onImageLinkInsert: function(url) {
+            // Remove any existing images with this URL first
+            $('#summernote').find(`img[src="${url}"]`).not('[data-resized="true"]').remove();
+            
+            // Add the new resized image
+            $('#summernote').summernote('insertImage', url, function($image) {
+                $image.css('width', '100%');
+                $image.attr('data-actual-width', '100%');
+                $image.attr('data-resized', 'true');
+            });
         }
     }
 });
 
         function uploadImage(file) {
-            $('#loadingOverlay').show();
-            const formData = new FormData();
-            formData.append('image', file);
-            
-            $.ajax({
-                url: `${BACKEND_URL}/upload-image`,
-                method: 'POST',
-                data: formData,
-                processData: false,
-                contentType: false,
-                success: function(response) {
-                    if (response.url) {
-                        $('#summernote').summernote('insertImage', response.url);
-                    } else {
-                        alert('Image upload failed');
-                    }
-                },
-                error: function() {
-                    alert('Image upload failed');
-                },
-                complete: function() {
-                    $('#loadingOverlay').hide();
-                }
-            });
+    $('#loadingOverlay').show();
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    $.ajax({
+        url: `${BACKEND_URL}/upload-image`,
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(response) {
+            if (response.url) {
+                // Remove any existing images with this URL
+                $('#summernote').find(`img[src="${response.url}"]`).remove();
+                
+                // Insert new image
+                $('#summernote').summernote('insertImage', response.url, function($image) {
+                    $image.attr('data-resized', 'true');
+                    $image.css('width', '100%');
+                });
+            } else {
+                alert('Image upload failed');
+            }
+        },
+        error: function() {
+            alert('Image upload failed');
+        },
+        complete: function() {
+            $('#loadingOverlay').hide();
         }
+    });
+}
 
         function loadInitialContent(filename) {
             $('#loadingOverlay').show();

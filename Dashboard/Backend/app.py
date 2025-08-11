@@ -141,6 +141,7 @@ def init_db():
                 status TEXT NOT NULL,
                 error_message TEXT,
                 conversion_id TEXT,
+                parent_conversion_id TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -1581,7 +1582,7 @@ def upload_signing_document():
     # Create a unique filename to avoid conflicts
     unique_id = str(uuid.uuid4())
     temp_filename = f"{unique_id}{file_ext}"
-    temp_path = os.path.join(UPLOAD_FOLDER, temp_filename)
+    temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
     file.save(temp_path)
 
     # Record the initial document upload in database
@@ -1591,25 +1592,28 @@ def upload_signing_document():
         cursor = db.cursor()
         cursor.execute("""
             INSERT INTO conversions 
-            (user_id, conversion_type, original_filename, converted_filename, file_size, status, conversion_id) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (user_id, conversion_type, original_filename, converted_filename, 
+             file_size, status, conversion_id, parent_conversion_id) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user_id,
-            'document_signing',
+            'document_signing_upload',
             filename,
             None,  # Will be updated after signing
             file_size,
             'uploaded',  # Initial status
-            conversion_id
+            conversion_id,
+            None  # No parent for initial upload
         ))
         db.commit()
     except Exception as e:
         app.logger.error(f"Failed to record document upload: {str(e)}")
+        return jsonify({"error": "Database error"}), 500
 
     # Convert Word to PDF if needed
     if file_ext in ['.doc', '.docx']:
         pdf_filename = f"{unique_id}.pdf"
-        pdf_path = os.path.join(UPLOAD_FOLDER, pdf_filename)
+        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename)
         
         # Try multiple conversion methods with fallbacks
         conversion_success = False
@@ -1617,15 +1621,15 @@ def upload_signing_document():
         # Method 1: Try LibreOffice first (fastest)
         try:
             result = subprocess.run(
-                ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', UPLOAD_FOLDER, temp_path],
+                ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', app.config['UPLOAD_FOLDER'], temp_path],
                 capture_output=True,
                 text=True,
-                timeout=180  # 60 second timeout
+                timeout=180
             )
             if result.returncode == 0:
                 conversion_success = True
                 # LibreOffice creates output with same name but .pdf extension
-                temp_pdf_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}.pdf")
+                temp_pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}.pdf")
                 if os.path.exists(temp_pdf_path):
                     os.rename(temp_pdf_path, pdf_path)
         except Exception as e:
@@ -1643,7 +1647,7 @@ def upload_signing_document():
         # Method 3: Fallback to Word COM if other methods fail
         if not conversion_success:
             try:
-                comtypes.CoInitialize()
+                pythoncom.CoInitialize()
                 word = comtypes.client.CreateObject('Word.Application')
                 word.Visible = False
                 doc = word.Documents.Open(temp_path)
@@ -1666,7 +1670,7 @@ def upload_signing_document():
                 
                 return jsonify({"error": "Failed to convert Word document"}), 500
             finally:
-                comtypes.CoUninitialize()
+                pythoncom.CoUninitialize()
 
         # Clean up original Word file
         os.remove(temp_path)
@@ -1682,7 +1686,7 @@ def upload_signing_document():
     # Handle actual PDF uploads
     elif file_ext == '.pdf':
         # Rename to our unique filename
-        final_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}.pdf")
+        final_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}.pdf")
         os.rename(temp_path, final_path)
         return jsonify({
             "document_id": f"{unique_id}.pdf",
@@ -1695,10 +1699,14 @@ def upload_signing_document():
     
 @app.route('/sign-document/<document_id>')
 def sign_document(document_id):
-    document_path = os.path.join(UPLOAD_FOLDER, document_id)
+    document_path = os.path.join(app.config['UPLOAD_FOLDER'], document_id)
     if not os.path.exists(document_path):
         return "Document not found", 404
 
+    # Get parameters from query string
+    user_id = request.args.get('user_id')
+    conversion_id = request.args.get('conversion_id')
+    
     # Get original extension
     original_extension = os.path.splitext(document_id)[1].lower()
     
@@ -2274,7 +2282,10 @@ saveButton.addEventListener("click", async function () {
 
     </body>
     </html>
-    """, document_id=document_id, original_extension=original_extension)
+    """,    document_id=display_document_id, 
+    original_extension=original_extension,
+    user_id=user_id,
+    conversion_id=conversion_id)
 
 
 @app.route('/save-signed-document', methods=['POST'])
@@ -2284,12 +2295,12 @@ def save_signed_document():
     original_extension = data.get('original_extension')
     signatures_data = data.get('signatures', [])
     user_id = data.get('user_id')
-    conversion_id = data.get('conversion_id')
+    conversion_id = data.get('conversion_id')  # This is the parent conversion_id
 
     if not document_id or not signatures_data:
         return jsonify({"error": "Invalid data"}), 400
 
-    document_path = os.path.join(UPLOAD_FOLDER, document_id)
+    document_path = os.path.join(app.config['UPLOAD_FOLDER'], document_id)
     if not os.path.exists(document_path):
         return jsonify({"error": "Document not found"}), 404
 
@@ -2312,118 +2323,98 @@ def save_signed_document():
                     'position': sig['position']
                 })
 
-        signed_filename = ""
-        if original_extension == '.pdf':
-            # Handle PDF documents
-            original_pdf = PdfReader(document_path)
-            output = PdfWriter()
+        # Generate a new conversion_id for the signed version
+        signed_conversion_id = str(uuid.uuid4())
+        signed_filename = f"signed_{document_id}"
+        signed_document_path = os.path.join(app.config['OUTPUT_FOLDER'], signed_filename)
 
-            for page_num in range(len(original_pdf.pages)):
-                page = original_pdf.pages[page_num]
-                page_width = float(page.mediabox.width)
-                page_height = float(page.mediabox.height)
+        # Handle PDF documents
+        original_pdf = PdfReader(document_path)
+        output = PdfWriter()
 
-                page_signatures = [sig for sig in signature_images if sig['page'] == page_num]
-                
-                if page_signatures:
-                    packet = BytesIO()
-                    can = canvas.Canvas(packet, pagesize=(page_width, page_height))
-                    
-                    for sig in page_signatures:
-                        pos = sig['position']
-                        x = pos['x']
-                        y = pos['y']
-                        width = pos['width']
-                        height = pos['height']
-                        can.drawImage(sig['path'], x, y, width, height, mask='auto')
-                    
-                    can.save()
-                    packet.seek(0)
-                    overlay_pdf = PdfReader(packet)
-                    page.merge_page(overlay_pdf.pages[0])
-                
-                output.add_page(page)
+        for page_num in range(len(original_pdf.pages)):
+            page = original_pdf.pages[page_num]
+            page_width = float(page.mediabox.width)
+            page_height = float(page.mediabox.height)
 
-            signed_filename = f"signed_{document_id}"
-            signed_document_path = os.path.join(OUTPUT_FOLDER, signed_filename)
-
-            with open(signed_document_path, "wb") as output_pdf:
-                output.write(output_pdf)
-
-        elif original_extension in ('.doc', '.docx'):
-            # Handle Word documents
-            temp_pdf_path = os.path.join(tempfile.gettempdir(), f"temp_{document_id}.pdf")
-            pypandoc.convert_file(document_path, 'pdf', outputfile=temp_pdf_path)
+            page_signatures = [sig for sig in signature_images if sig['page'] == page_num]
             
-            original_pdf = PdfReader(temp_pdf_path)
-            output = PdfWriter()
-
-            for page_num in range(len(original_pdf.pages)):
-                page = original_pdf.pages[page_num]
-                page_width = float(page.mediabox.width)
-                page_height = float(page.mediabox.height)
-
-                page_signatures = [sig for sig in signature_images if sig['page'] == page_num]
+            if page_signatures:
+                packet = BytesIO()
+                can = canvas.Canvas(packet, pagesize=(page_width, page_height))
                 
-                if page_signatures:
-                    packet = BytesIO()
-                    can = canvas.Canvas(packet, pagesize=(page_width, page_height))
-                    
-                    for sig in page_signatures:
-                        pos = sig['position']
-                        x = pos['x']
-                        y = pos['y']
-                        width = pos['width']
-                        height = pos['height']
-                        can.drawImage(sig['path'], x, y, width, height, mask='auto')
-                    
-                    can.save()
-                    packet.seek(0)
-                    overlay_pdf = PdfReader(packet)
-                    page.merge_page(overlay_pdf.pages[0])
+                for sig in page_signatures:
+                    pos = sig['position']
+                    x = pos['x']
+                    y = pos['y']
+                    width = pos['width']
+                    height = pos['height']
+                    can.drawImage(sig['path'], x, y, width, height, mask='auto')
                 
-                output.add_page(page)
-
-            signed_pdf_filename = f"signed_{os.path.splitext(document_id)[0]}.pdf"
-            signed_pdf_path = os.path.join(OUTPUT_FOLDER, signed_pdf_filename)
-
-            with open(signed_pdf_path, "wb") as output_pdf:
-                output.write(output_pdf)
+                can.save()
+                packet.seek(0)
+                overlay_pdf = PdfReader(packet)
+                page.merge_page(overlay_pdf.pages[0])
             
-            signed_document_path = signed_pdf_path
-            signed_filename = signed_pdf_filename
+            output.add_page(page)
 
-        # Update database with completion
+        with open(signed_document_path, "wb") as output_pdf:
+            output.write(output_pdf)
+
+        # Update database with completion - create a new record for the signed version
         if user_id and conversion_id:
             try:
                 db = get_db()
                 cursor = db.cursor()
+                
+                # First get the original conversion details
                 cursor.execute("""
-                    UPDATE conversions SET 
-                    status=?, 
-                    converted_filename=?,
-                    completed_at=CURRENT_TIMESTAMP
+                    SELECT original_filename, file_size FROM conversions 
                     WHERE conversion_id=?
-                """, (
-                    'completed',
-                    signed_filename,
-                    conversion_id
-                ))
-                db.commit()
+                """, (conversion_id,))
+                original_data = cursor.fetchone()
+                
+                if original_data:
+                    # Create new record for the signed document
+                    cursor.execute("""
+                        INSERT INTO conversions 
+                        (user_id, conversion_type, original_filename, converted_filename, 
+                         file_size, status, conversion_id, parent_conversion_id, completed_at) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """, (
+                        user_id,
+                        'document_signing_completed',
+                        original_data['original_filename'],
+                        signed_filename,
+                        os.path.getsize(signed_document_path),
+                        'completed',
+                        signed_conversion_id,
+                        conversion_id  # Link to parent conversion
+                    ))
+                    
+                    # Update the original record to mark it as processed
+                    cursor.execute("""
+                        UPDATE conversions SET 
+                        status=?,
+                        completed_at=CURRENT_TIMESTAMP
+                        WHERE conversion_id=?
+                    """, (
+                        'processed',
+                        conversion_id
+                    ))
+                    
+                    db.commit()
             except Exception as e:
-                app.logger.error(f"Failed to update conversion record: {str(e)}")
+                app.logger.error(f"Failed to update conversion records: {str(e)}")
 
         # Clean up temporary files
         for sig in signature_images:
             os.unlink(sig['path'])
-        
-        if original_extension in ('.doc', '.docx') and os.path.exists(temp_pdf_path):
-            os.unlink(temp_pdf_path)
 
-        return send_from_directory(OUTPUT_FOLDER, os.path.basename(signed_document_path), as_attachment=True)
+        return send_from_directory(app.config['OUTPUT_FOLDER'], os.path.basename(signed_document_path), as_attachment=True)
 
     except Exception as e:
-        # Update database with failure
+        # Update database with failure if we have a conversion_id
         if user_id and conversion_id:
             try:
                 db = get_db()
@@ -2447,7 +2438,7 @@ def save_signed_document():
 
 @app.route('/download-signed/<filename>')
 def download_signed(filename):
-    return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
+    return send_from_directory(app.config['OUTPUT_FOLDER'], filename, as_attachment=True)
 
 
 # Edit PDF document 
@@ -2457,8 +2448,6 @@ def upload_edit_pdf():
         return jsonify({'error': 'No file part'}), 400
 
     file = request.files['pdfFile']
-    user_id = request.form.get('user_id', 'anonymous')
-    
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
@@ -2466,16 +2455,20 @@ def upload_edit_pdf():
         return jsonify({'error': 'Only PDF files are allowed'}), 400
 
     try:
+        # Get current user ID if available
+        current_user_id = request.form.get('user_id') or 'anonymous'
+        
         filename = secure_filename(file.filename)
         unique_id = str(uuid.uuid4())
         pdf_filename = f"{unique_id}_{filename}"
         pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename)
         file.save(pdf_path)
+
+        docx_filename = f"{unique_id}.docx"
+        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], docx_filename)
         
-        # Record the initial upload in database
+        # Record initial upload in database
         conversion_id = str(uuid.uuid4())
-        file_size = os.path.getsize(pdf_path)
-        
         db = get_db()
         cursor = db.cursor()
         cursor.execute("""
@@ -2483,37 +2476,31 @@ def upload_edit_pdf():
             (user_id, conversion_type, original_filename, converted_filename, file_size, status, conversion_id) 
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
-            user_id,
-            'pdf_editing',
-            filename,
-            None,  # Will be updated after editing
-            file_size,
-            'uploaded',  # Initial status
+            current_user_id,
+            'pdf_edit_upload',
+            file.filename,
+            pdf_filename,
+            os.path.getsize(pdf_path),
+            'uploaded',
             conversion_id
         ))
         db.commit()
-
-        docx_filename = f"{unique_id}.docx"
-        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], docx_filename)
         
         # Convert PDF to DOCX with enhanced error handling
         try:
             converter = Converter(pdf_path)
-            # Try with images first
             try:
                 converter.convert(docx_path, keep_images=True)
             except Exception as img_error:
                 app.logger.warning(f"Image conversion failed, trying without images: {str(img_error)}")
-                # Fallback to conversion without images
                 converter.convert(docx_path, keep_images=False)
             finally:
                 converter.close()
         except Exception as conv_error:
-            app.logger.error(f"PDF conversion failed: {str(conv_error)}")
             # Update database with failure
             cursor.execute("""
-                UPDATE conversions SET status=?, error_message=?
-                WHERE conversion_id=?
+                UPDATE conversions SET status = ?, error_message = ?
+                WHERE conversion_id = ?
             """, ('failed', str(conv_error), conversion_id))
             db.commit()
             
@@ -2525,12 +2512,18 @@ def upload_edit_pdf():
         try:
             doc = Document(docx_path)
             html_content = process_docx_to_html(doc, unique_id)
-        except Exception as proc_error:
-            app.logger.error(f"DOCX processing failed: {str(proc_error)}")
-            # Update database with failure
+            
+            # Update database with success
             cursor.execute("""
-                UPDATE conversions SET status=?, error_message=?
-                WHERE conversion_id=?
+                UPDATE conversions SET status = ?, converted_filename = ?
+                WHERE conversion_id = ?
+            """, ('ready_for_edit', docx_filename, conversion_id))
+            db.commit()
+            
+        except Exception as proc_error:
+            cursor.execute("""
+                UPDATE conversions SET status = ?, error_message = ?
+                WHERE conversion_id = ?
             """, ('failed', str(proc_error), conversion_id))
             db.commit()
             return jsonify({'error': f'DOCX processing failed: {str(proc_error)}'}), 500
@@ -2540,29 +2533,54 @@ def upload_edit_pdf():
             'pdfFileName': pdf_filename,
             'docxFilename': docx_filename,
             'htmlContent': html_content,
-            'conversion_id': conversion_id
+            'conversionId': conversion_id
         })
 
     except Exception as e:
         app.logger.error(f"Error in upload-edit-pdf: {str(e)}\n{traceback.format_exc()}")
-        # Clean up files if they exist
         if 'pdf_path' in locals() and os.path.exists(pdf_path):
             os.remove(pdf_path)
         if 'docx_path' in locals() and os.path.exists(docx_path):
             os.remove(docx_path)
-            
-        # Record failure if we have a conversion_id
-        if 'conversion_id' in locals():
-            try:
-                cursor.execute("""
-                    UPDATE conversions SET status=?, error_message=?
-                    WHERE conversion_id=?
-                """, ('failed', str(e), conversion_id))
-                db.commit()
-            except Exception as db_error:
-                app.logger.error(f"Failed to update conversion record: {str(db_error)}")
-                
         return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/get-pdf-content-for-editing')
+def get_pdf_content_for_editing():
+    try:
+        file_id = request.args.get('file_id')
+        if not file_id:
+            return jsonify({'error': 'Missing file_id parameter'}), 400
+
+        # Clean the filename and extract UUID
+        clean_file_id = secure_filename(file_id)
+        unique_id = clean_file_id.split('_')[0]
+        docx_filename = f"{unique_id}.docx"
+        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], docx_filename)
+        
+        # Verify the file exists
+        if not os.path.exists(docx_path):
+            existing_files = os.listdir(app.config['UPLOAD_FOLDER'])
+            return jsonify({
+                'error': f'Document not found at path: {docx_path}',
+                'looking_for': docx_filename,
+                'existing_files': existing_files
+            }), 404
+
+        # Process the DOCX file
+        doc = Document(docx_path)
+        html_content = process_docx_to_html(doc, unique_id)
+
+        return jsonify({'success': True, 'content': html_content})
+    except Exception as e:
+        app.logger.error(f"Error in get-pdf-content: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/pdf-editor-view')
+def pdf_editor_view():
+    file_id = request.args.get('file')
+    if not file_id:
+        return "Missing file parameter", 400
+    return render_template('editor.html', file_id=file_id)
 
 def process_docx_to_html(doc, unique_id):
     """Convert DOCX to HTML while preserving images and styles"""
@@ -2611,47 +2629,10 @@ def process_docx_to_html(doc, unique_id):
             with open(image_path, 'rb') as img_file:
                 img_data = base64.b64encode(img_file.read()).decode('utf-8')
                 img_src = f"data:image/{image_ext};base64,{img_data}"
-                html_parts.append(f'<img src="{img_src}" style="max-width:100%;">')
+                html_parts.append(f'<img src="{img_src}" style="max-width:100%;" data-resized="true">')
 
     return "".join(html_parts)
 
-@app.route('/get-pdf-content-for-editing')
-def get_pdf_content_for_editing():
-    try:
-        file_id = request.args.get('file_id')
-        if not file_id:
-            return jsonify({'error': 'Missing file_id parameter'}), 400
-
-        # Clean the filename and extract UUID
-        clean_file_id = secure_filename(file_id)
-        unique_id = clean_file_id.split('_')[0]
-        docx_filename = f"{unique_id}.docx"
-        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], docx_filename)
-        
-        # Verify the file exists
-        if not os.path.exists(docx_path):
-            existing_files = os.listdir(app.config['UPLOAD_FOLDER'])
-            return jsonify({
-                'error': f'Document not found at path: {docx_path}',
-                'looking_for': docx_filename,
-                'existing_files': existing_files
-            }), 404
-
-        # Process the DOCX file
-        doc = Document(docx_path)
-        html_content = process_docx_to_html(doc, unique_id)
-
-        return jsonify({'success': True, 'content': html_content})
-    except Exception as e:
-        app.logger.error(f"Error in get-pdf-content: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({'error': 'Internal server error'}), 500
-
-@app.route('/pdf-editor-view')
-def pdf_editor_view():
-    file_id = request.args.get('file')
-    if not file_id:
-        return "Missing file parameter", 400
-    return render_template('editor.html', file_id=file_id)
 
 @app.route('/save-edited-pdf', methods=['POST'])
 def save_edited_pdf():
@@ -2662,8 +2643,8 @@ def save_edited_pdf():
 
         file_id = data.get('file_id')
         html_content = data.get('content')
-        user_id = data.get('user_id')
-        conversion_id = data.get('conversion_id')
+        conversion_id = data.get('conversionId')
+        current_user_id = data.get('userId') or 'anonymous'
         
         if not file_id or not html_content:
             return jsonify({'error': 'Missing parameters'}), 400
@@ -2671,6 +2652,26 @@ def save_edited_pdf():
         # Clean the filename and extract UUID
         clean_file_id = secure_filename(file_id)
         unique_id = clean_file_id.split('_')[0]
+        
+        # Create BeautifulSoup object and remove duplicates
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Track seen images and remove duplicates
+        seen_images = {}
+        for img in soup.find_all('img'):
+            src = img.get('src', '')
+            if src in seen_images:
+                img.decompose()
+            else:
+                img['data-resized'] = 'true'
+                seen_images[src] = img
+                if 'style' in img.attrs:
+                    style = img['style']
+                    width_match = re.search(r'width:\s*(\d+)px', style)
+                    if width_match:
+                        img['data-width'] = width_match.group(1)
+        
+        cleaned_html = str(soup)
         
         # Create temporary directory for processing
         temp_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{unique_id}")
@@ -2693,8 +2694,8 @@ def save_edited_pdf():
         if 'Heading 2' not in styles:
             styles.add_style('Heading 2', WD_STYLE_TYPE.PARAGRAPH)
         
-        # Parse HTML with BeautifulSoup
-        soup = BeautifulSoup(html_content, 'html.parser')
+        # Parse cleaned HTML with BeautifulSoup
+        soup = BeautifulSoup(cleaned_html, 'html.parser')
         
         # Process all elements in order
         for element in soup.find_all(True):
@@ -2706,46 +2707,52 @@ def save_edited_pdf():
                 para = doc.add_paragraph(style=f'Heading {heading_level}')
                 process_element(element, para, images_dir)
             elif element.name == 'img':
-                add_image_to_doc(element, doc, images_dir)
+                if element.get('data-resized') == 'true':
+                    try:
+                        width = None
+                        if 'data-width' in element.attrs:
+                            width = int(element['data-width'])
+                        elif 'style' in element.attrs:
+                            style = element['style']
+                            width_match = re.search(r'width:\s*(\d+)px', style)
+                            if width_match:
+                                width = int(width_match.group(1))
+                        add_image_to_doc(element, doc, images_dir, width)
+                    except Exception as img_error:
+                        app.logger.error(f"Failed to process image: {str(img_error)}")
+                        continue  # Skip this image but continue processing
             elif element.name in ['ul', 'ol']:
                 process_list(element, doc, images_dir, element.name == 'ol')
             elif element.name == 'table':
                 process_table(element, doc, images_dir)
 
-        # Save the DOCX file with error handling
+        # Save the DOCX file
         try:
             doc.save(temp_docx_path)
         except Exception as e:
-            app.logger.error(f"Error saving DOCX: {str(e)}")
-            # Try again with a different filename if first attempt fails
             temp_docx_path = os.path.join(temp_dir, f"{unique_id}_alt.docx")
             doc.save(temp_docx_path)
 
-        # Convert DOCX to PDF using multiple methods with fallbacks
+        # Convert DOCX to PDF
         final_pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], clean_file_id)
         success = False
         error_msg = None
         
-        # Method 1: Try LibreOffice first (terminal command)
+        # Method 1: Try LibreOffice
         try:
             import subprocess
             result = subprocess.run(
                 ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', temp_dir, temp_docx_path],
                 capture_output=True,
                 text=True,
-                timeout=180  # 60 second timeout
+                timeout=180
             )
             if result.returncode == 0:
                 success = True
-                app.logger.info("LibreOffice conversion succeeded")
-            else:
-                error_msg = f"LibreOffice failed: {result.stderr}"
-                app.logger.error(error_msg)
         except Exception as e:
-            error_msg = f"LibreOffice conversion failed: {str(e)}"
-            app.logger.error(error_msg)
+            error_msg = f"LibreOffice failed: {str(e)}"
 
-        # Method 2: Fallback to Word COM if LibreOffice fails
+        # Method 2: Fallback to Word COM
         if not success:
             try:
                 pythoncom.CoInitialize()
@@ -2759,52 +2766,53 @@ def save_edited_pdf():
                 word.Quit()
                 success = True
             except Exception as e:
-                error_msg = f"Word COM conversion failed: {str(e)}"
-                app.logger.error(error_msg)
+                error_msg = f"Word COM failed: {str(e)}"
             finally:
                 pythoncom.CoUninitialize()
 
-        # Method 3: Final fallback to docx2pdf if other methods fail
+        # Method 3: Final fallback to docx2pdf
         if not success:
             try:
                 from docx2pdf import convert
                 convert(temp_docx_path, temp_pdf_path)
                 success = True
             except Exception as e:
-                error_msg = f"docx2pdf conversion failed: {str(e)}"
-                app.logger.error(error_msg)
+                error_msg = f"docx2pdf failed: {str(e)}"
 
         if not success:
             raise Exception(f"All PDF conversion methods failed. Last error: {error_msg}")
 
         # Verify PDF was created
         if not os.path.exists(temp_pdf_path):
-            temp_pdf_path = os.path.join(temp_dir, f"{unique_id}.pdf")  # Try default output name
+            temp_pdf_path = os.path.join(temp_dir, f"{unique_id}.pdf")
             if not os.path.exists(temp_pdf_path):
-                raise Exception("PDF file was not created by any conversion method")
+                raise Exception("PDF file was not created")
 
-        # Move the final PDF to the uploads folder
+        # Move the final PDF
         shutil.move(temp_pdf_path, final_pdf_path)
         
-        # Update database with completion
-        if user_id and conversion_id:
-            try:
-                db = get_db()
-                cursor = db.cursor()
-                cursor.execute("""
-                    UPDATE conversions SET 
-                    status=?, 
-                    converted_filename=?,
-                    completed_at=CURRENT_TIMESTAMP
-                    WHERE conversion_id=?
-                """, (
-                    'completed',
-                    clean_file_id,
-                    conversion_id
-                ))
-                db.commit()
-            except Exception as e:
-                app.logger.error(f"Failed to update conversion record: {str(e)}")
+        # After successful PDF creation, record in database
+        db = get_db()
+        cursor = db.cursor()
+        
+        # Create a new record for the edited version
+        edited_conversion_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO conversions 
+            (user_id, conversion_type, original_filename, converted_filename, 
+             file_size, status, conversion_id, parent_conversion_id) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            current_user_id,
+            'pdf_edit_save',
+            clean_file_id,
+            os.path.basename(final_pdf_path),
+            os.path.getsize(final_pdf_path),
+            'completed',
+            edited_conversion_id,
+            conversion_id
+        ))
+        db.commit()
 
         # Clean up temporary files
         try:
@@ -2812,36 +2820,53 @@ def save_edited_pdf():
         except Exception as e:
             app.logger.error(f"Error cleaning up temp files: {str(e)}")
 
-        return jsonify({'success': True, 'pdfUrl': clean_file_id})
+        return jsonify({
+            'success': True, 
+            'pdfUrl': os.path.basename(final_pdf_path),
+            'message': 'PDF successfully saved',
+            'conversionId': edited_conversion_id
+        })
+        
     except Exception as e:
         app.logger.error(f"Error saving PDF: {str(e)}\n{traceback.format_exc()}")
-        # Update database with failure if we have the conversion_id
-        if 'conversion_id' in locals() and conversion_id:
+        # Record failure if we had a conversion_id
+        if 'conversion_id' in locals():
             try:
                 db = get_db()
                 cursor = db.cursor()
                 cursor.execute("""
-                    UPDATE conversions SET 
-                    status=?, 
-                    error_message=?,
-                    completed_at=CURRENT_TIMESTAMP
-                    WHERE conversion_id=?
-                """, (
-                    'failed',
-                    str(e),
-                    conversion_id
-                ))
+                    UPDATE conversions SET status = ?, error_message = ?
+                    WHERE conversion_id = ?
+                """, ('failed', str(e), conversion_id))
                 db.commit()
             except Exception as db_error:
-                app.logger.error(f"Failed to update conversion record: {str(db_error)}")
+                app.logger.error(f"Failed to record error: {str(db_error)}")
                 
-        return jsonify({'error': str(e)}), 500
+        if 'temp_dir' in locals() and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception as cleanup_error:
+                app.logger.error(f"Cleanup error: {str(cleanup_error)}")
+        return jsonify({
+            'error': str(e),
+            'message': 'Failed to save PDF'
+        }), 500
+
+
 
 def process_element(element, para, images_dir):
     """Process HTML element with comprehensive style and content handling"""
     for content in element.contents:
         if content.name == 'img':
-            add_image_to_paragraph(content, para, images_dir)
+            # Get dimensions from style or attributes
+            width = None
+            if 'style' in content.attrs:
+                style = content['style']
+                width_match = re.search(r'width:\s*(\d+)px', style)
+                if width_match:
+                    width = int(width_match.group(1))
+            
+            add_image_to_paragraph(content, para, images_dir, width)
         elif content.name == 'span':
             run = para.add_run(content.text)
             apply_styles_to_run(run, content.get('style', ''))
@@ -2878,7 +2903,7 @@ def apply_styles_to_run(run, style_str):
         style_dict[prop] = value
     
     # Apply styles
-    if 'font-weight' in style_dict and style_dict['font-weight'] == 'bold':
+    if 'font-weight' in style_dict and style_dict['font-weight'] in ['bold', 'bolder', '700', '800', '900']:
         run.bold = True
     if 'font-style' in style_dict and style_dict['font-style'] == 'italic':
         run.italic = True
@@ -2934,29 +2959,130 @@ def process_image_element(element, parent, images_dir):
         app.logger.error(f"Error processing image: {str(e)}\n{traceback.format_exc()}")
         raise
 
-def add_image_to_doc(element, doc, images_dir):
-    """Add image directly to document"""
-    process_image_element(element, doc, images_dir)
-
-def add_image_to_paragraph(element, para, images_dir):
-    """Embed an image inside a paragraph from base64 src"""
-    if 'src' not in element.attrs or not element['src'].startswith('data:image'):
-        return
-
+def add_image_to_doc(element, doc, images_dir, width=None, height=None):
+    """Add image directly to document with optional width/height in pixels"""
     try:
+        if 'src' not in element.attrs:
+            return
+            
+        src = element['src']
+        if not src.startswith('data:image'):
+            return
+            
+        # Skip if this image has already been processed
+        if hasattr(element, '_processed'):
+            return
+        element._processed = True
+            
+        # Extract image format from data URL
+        img_format = src.split(';')[0].split('/')[-1].lower()
+        if img_format not in ['png', 'jpeg', 'jpg', 'gif']:
+            img_format = 'png'  # default to png if format not recognized
+            
+        img_data = src.split('base64,')[-1]
+        try:
+            img_bytes = base64.b64decode(img_data)
+            img_filename = f"{uuid.uuid4()}.{img_format}"
+            img_path = os.path.join(images_dir, img_filename)
+            
+            with open(img_path, 'wb') as f:
+                f.write(img_bytes)
+            
+            # Convert pixel dimensions to inches (96 DPI standard)
+            width_inches = Inches(width / 96) if width else None
+            height_inches = Inches(height / 96) if height else None
+            
+            # Add image with dimensions if specified
+            try:
+                if width_inches and height_inches:
+                    doc.add_picture(img_path, width=width_inches, height=height_inches)
+                elif width_inches:
+                    doc.add_picture(img_path, width=width_inches)
+                elif height_inches:
+                    doc.add_picture(img_path, height=height_inches)
+                else:
+                    doc.add_picture(img_path)
+            except Exception as e:
+                app.logger.error(f"Failed to add picture to doc: {str(e)}")
+                # Try adding without dimensions if that failed
+                doc.add_picture(img_path)
+                
+        except Exception as e:
+            app.logger.error(f"Error processing image data: {str(e)}")
+            raise
+
+    except Exception as e:
+        app.logger.error(f"Error adding image to doc: {str(e)}")
+        raise
+
+def add_image_to_paragraph(element, para, images_dir, width=None):
+    """Embed an image inside a paragraph with optional width in pixels"""
+    try:
+        if 'src' not in element.attrs or not element['src'].startswith('data:image'):
+            return
+
+        # Skip if this is not a resized image
+        if element.get('data-resized') != 'true':
+            return
+
+        # Extract image format from data URL
+        img_format = element['src'].split(';')[0].split('/')[-1]
+        if img_format not in ['png', 'jpeg', 'jpg', 'gif']:
+            img_format = 'png'
+            
         img_data = element['src'].split('base64,')[-1]
         img_bytes = base64.b64decode(img_data)
-        ext = element['src'].split(';')[0].split('/')[-1] or 'png'
-        img_filename = f"{uuid.uuid4()}.{ext}"
+        img_filename = f"{uuid.uuid4()}.{img_format}"
         img_path = os.path.join(images_dir, img_filename)
 
         with open(img_path, 'wb') as f:
             f.write(img_bytes)
 
         run = para.add_run()
-        run.add_picture(img_path)
+        
+        # Convert pixel width to inches if specified
+        width_inches = Inches(width / 96) if width else None
+        
+        if width_inches:
+            run.add_picture(img_path, width=width_inches)
+        else:
+            run.add_picture(img_path)
     except Exception as e:
-        app.logger.error(f"Failed to embed image: {str(e)}")
+        app.logger.error(f"Failed to embed image in paragraph: {str(e)}")
+        raise
+
+
+def add_image_to_paragraph(element, para, images_dir, width=None):
+    """Embed an image inside a paragraph with optional width in pixels"""
+    try:
+        if 'src' not in element.attrs or not element['src'].startswith('data:image'):
+            return
+
+        # Extract image format from data URL
+        img_format = element['src'].split(';')[0].split('/')[-1]
+        if img_format not in ['png', 'jpeg', 'jpg', 'gif']:
+            img_format = 'png'
+            
+        img_data = element['src'].split('base64,')[-1]
+        img_bytes = base64.b64decode(img_data)
+        img_filename = f"{uuid.uuid4()}.{img_format}"
+        img_path = os.path.join(images_dir, img_filename)
+
+        with open(img_path, 'wb') as f:
+            f.write(img_bytes)
+
+        run = para.add_run()
+        
+        # Convert pixel width to inches if specified
+        width_inches = Inches(width / 96) if width else None
+        
+        if width_inches:
+            run.add_picture(img_path, width=width_inches)
+        else:
+            run.add_picture(img_path)
+    except Exception as e:
+        app.logger.error(f"Failed to embed image in paragraph: {str(e)}")
+        raise
 
 def process_image_element(element, parent, images_dir):
     """Process image element"""
@@ -2990,25 +3116,38 @@ def process_list(element, doc, images_dir, is_ordered=False):
             para = doc.add_paragraph(style='List Number')
         else:
             para = doc.add_paragraph(style='List Bullet')
-        process_element(item, para, images_dir)
+        process_element_content(item, para, images_dir)
 
 def process_table(element, doc, images_dir):
-    """Process table elements"""
-    table = doc.add_table(rows=1, cols=1)
-    for row in element.find_all('tr'):
+    """Process table elements with proper structure and images"""
+    # Count rows and columns
+    rows = element.find_all('tr')
+    if not rows:
+        return
+        
+    # Determine number of columns from first row
+    cols = len(rows[0].find_all(['td', 'th']))
+    
+    table = doc.add_table(rows=1, cols=cols)
+    
+    for row_idx, row in enumerate(rows):
         cells = row.find_all(['td', 'th'])
         if not cells:
             continue
             
-        table_row = table.add_row()
-        for i, cell in enumerate(cells):
-            if i >= len(table_row.cells):
+        # Add new row if needed (first row already exists)
+        if row_idx > 0:
+            table.add_row()
+            
+        for col_idx, cell in enumerate(cells):
+            if col_idx >= len(table.rows[row_idx].cells):
                 table.add_column()
-            process_element(cell, table_row.cells[i], images_dir)
+                
+            process_element_content(cell, table.rows[row_idx].cells[col_idx], images_dir)
 
 
 def process_html_to_docx(html_content, doc, unique_id):
-    """Improved HTML to DOCX conversion with better style handling"""
+    """Improved HTML to DOCX conversion with better style handling including image resizing"""
     soup = BeautifulSoup(html_content, 'html.parser')
     images_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_images")
     os.makedirs(images_dir, exist_ok=True)
@@ -3017,28 +3156,82 @@ def process_html_to_docx(html_content, doc, unique_id):
     for element in soup.find_all(True):
         if element.name == 'p':
             para = doc.add_paragraph()
-            self.process_element_content(element, para, images_dir)
+            process_element_content(element, para, images_dir)
         elif element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
             heading_level = int(element.name[1])
             para = doc.add_paragraph(style=f'Heading {heading_level}')
-            self.process_element_content(element, para, images_dir)
+            process_element_content(element, para, images_dir)
         elif element.name == 'img':
-            self.process_image(element, doc, images_dir)
+            # Handle standalone images with width from style or data attributes
+            width = None
+            height = None
+            
+            # Check style attribute first
+            if 'style' in element.attrs:
+                style = element['style']
+                width_match = re.search(r'width:\s*(\d+)px', style)
+                height_match = re.search(r'height:\s*(\d+)px', style)
+                if width_match:
+                    width = int(width_match.group(1))
+                if height_match:
+                    height = int(height_match.group(1))
+            
+            # Fallback to data attributes if no style
+            if not width and 'data-width' in element.attrs:
+                width = int(element['data-width'])
+            if not height and 'data-height' in element.attrs:
+                height = int(element['data-height'])
+            
+            add_image_to_doc(element, doc, images_dir, width, height)
         elif element.name in ['ul', 'ol']:
-            self.process_list(element, doc, images_dir, element.name == 'ol')
+            process_list(element, doc, images_dir, element.name == 'ol')
         elif element.name == 'table':
-            self.process_table(element, doc, images_dir)
+            process_table(element, doc, images_dir)
+        elif element.name == 'div':
+            # Handle div containers (common in summernote output)
+            for child in element.children:
+                if child.name == 'img':
+                    width = None
+                    if 'style' in child.attrs:
+                        style = child['style']
+                        width_match = re.search(r'width:\s*(\d+)px', style)
+                        if width_match:
+                            width = int(width_match.group(1))
+                    add_image_to_doc(child, doc, images_dir, width)
+                elif child.name:
+                    # Recursively process other elements
+                    process_html_to_docx(str(child), doc, unique_id)
 
 def process_element_content(element, para, images_dir):
-    """Process content within an element with styles"""
+    """Process content within an element with styles and images"""
     for content in element.contents:
         if content.name == 'img':
-            self.process_image(content, para, images_dir)
+            # Handle inline images with width
+            width = None
+            if 'style' in content.attrs:
+                style = content['style']
+                width_match = re.search(r'width:\s*(\d+)px', style)
+                if width_match:
+                    width = int(width_match.group(1))
+            add_image_to_paragraph(content, para, images_dir, width)
         elif content.name == 'span':
             run = para.add_run(content.text)
-            self.apply_styles(run, content.get('style', ''))
+            apply_styles_to_run(run, content.get('style', ''))
+        elif content.name in ['b', 'strong']:
+            run = para.add_run(content.text)
+            run.bold = True
+        elif content.name in ['i', 'em']:
+            run = para.add_run(content.text)
+            run.italic = True
+        elif content.name == 'u':
+            run = para.add_run(content.text)
+            run.underline = True
+        elif content.name == 'br':
+            para.add_run().add_break()
         elif content.name is None:  # Text node
-            para.add_run(str(content))
+            text = str(content).replace('\n', ' ')
+            if text.strip():
+                para.add_run(text)
 
 from docx.shared import RGBColor
 
@@ -3101,11 +3294,14 @@ def upload_image():
         image_path = os.path.join(app.config['UPLOAD_FOLDER'], image_filename)
         file.save(image_path)
         
-        # Return URL or base64 data
+        # Return URL with resized marker
         with open(image_path, 'rb') as img_file:
             img_data = base64.b64encode(img_file.read()).decode('utf-8')
             img_src = f"data:image/{filename.split('.')[-1]};base64,{img_data}"
-            return jsonify({'url': img_src})
+            return jsonify({
+                'url': img_src,
+                'resized': True
+            })
             
     except Exception as e:
         return jsonify({'error': str(e)}), 500

@@ -514,9 +514,9 @@ background: url(../Media/greenbg1.jpg) no-repeat center center/cover;
     padding: 0.8rem 1rem;
     position: relative;
   }
-  .user-icon{
+  /* .user-icon{
     display: none;
-  }
+  } */
 
   .navbar-collapse {
     position: absolute;

@@ -555,10 +555,7 @@ document.getElementById("pdfToPdfaForm").addEventListener("submit", function(e) 
     `;
     resultDiv.appendChild(link);
     
-    // Auto-click the download link
-    setTimeout(() => {
-      link.click();
-    }, 500);
+    // REMOVED THE AUTO-CLICK CODE HERE
   })
   .catch(error => {
     console.error("Error:", error);

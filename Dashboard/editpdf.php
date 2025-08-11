@@ -22,11 +22,11 @@ try {
     $user_id = $_SESSION['user_id'] ?? null;
     if (!$user_id) die("Login required");
 
-    // Get documents from last 48 hours
+    // Get documents from last 48 hours with PDF editing conversions
     $fortyEightHoursAgo = date('Y-m-d H:i:s', strtotime('-48 hours'));
     $stmt = $db->prepare('SELECT * FROM conversions 
                          WHERE user_id = :user_id 
-                         AND conversion_type = "pdf_editing" 
+                         AND (conversion_type = "pdf_edit_upload" OR conversion_type = "pdf_edit_save")
                          AND status != "failed" 
                          AND timestamp > :fortyEightHoursAgo 
                          ORDER BY timestamp DESC');
@@ -37,14 +37,24 @@ try {
     $documents = [];
     
     while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-        // Only include if we have a converted filename
+        // Only include if we have a valid filename
         if (!empty($row['converted_filename']) || !empty($row['original_filename'])) {
-            $documents[] = $row;
+            $documents[] = [
+                'id' => $row['id'],
+                'conversion_id' => $row['conversion_id'],
+                'original_filename' => $row['original_filename'],
+                'converted_filename' => $row['converted_filename'],
+                'status' => $row['status'],
+                'timestamp' => $row['timestamp'],
+                'conversion_type' => $row['conversion_type']
+            ];
         }
     }
 } catch (Exception $e) {
     die("Database error: " . $e->getMessage());
 }
+
+$backend_url = "http://localhost:5001";
 ?>
 
 <!DOCTYPE html>
@@ -69,7 +79,7 @@ try {
         }
         .document-icon {
             font-size: 3rem;
-            color: #d63384; /* Pink color for editing */
+            color: #d63384;
         }
         .document-name {
             white-space: nowrap;
@@ -79,9 +89,17 @@ try {
         .badge.completed { background-color: #28a745; }
         .badge.failed { background-color: #dc3545; }
         .badge.uploaded { background-color: #17a2b8; }
+        .badge.ready_for_edit { background-color: #ffc107; color: #000; }
         .expiry-notice {
             background-color: #fff3cd;
             border-left: 4px solid #ffc107;
+        }
+        .action-buttons {
+            margin-top: 10px;
+        }
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
         }
     </style>
 </head>
@@ -101,33 +119,46 @@ try {
         <i class="bi bi-clock-history"></i> Note: Documents are automatically deleted after 48 hours
     </div>
 
-    <?php if (empty($documents)): ?>
+   <?php if (empty($documents)): ?>
         <div class="alert alert-info">
             <i class="bi bi-info-circle"></i> No PDF documents available for editing.
         </div>
     <?php else: ?>
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-4">
             <?php foreach ($documents as $doc): 
-                // Use converted_filename if available, otherwise use original_filename
-                $editFile = !empty($doc['converted_filename']) ? $doc['converted_filename'] : $doc['original_filename'];
-                // Ensure we have a valid filename to edit
-                if (empty($editFile)) continue;
+                // Determine which file to use for each action
+                $editFile = ($doc['conversion_type'] === 'pdf_edit_upload') ? $doc['converted_filename'] : $doc['original_filename'];
+                $downloadFile = ($doc['conversion_type'] === 'pdf_edit_save') ? $doc['converted_filename'] : $doc['original_filename'];
+                
+                // Generate display name
+                $displayName = ($doc['conversion_type'] === 'pdf_edit_save') ? 
+                    "Edited_" . $doc['original_filename'] : 
+                    $doc['original_filename'];
             ?>
                 <div class="col">
                     <div class="card document-card">
                         <div class="card-body text-center">
                             <i class="bi bi-file-earmark-pdf-fill document-icon mb-3"></i>
-                            <h5 class="card-title document-name" title="<?= htmlspecialchars($doc['original_filename']) ?>">
-                                <?= htmlspecialchars($doc['original_filename']) ?>
+                            <h5 class="card-title document-name" title="<?= htmlspecialchars($displayName) ?>">
+                                <?= htmlspecialchars($displayName) ?>
                             </h5>
                             <p class="card-text text-muted small">
                                 <?= date('M d, Y H:i', strtotime($doc['timestamp'])) ?>
                             </p>
-                            <span class="badge <?= $doc['status'] ?> mb-2">
-                                <?= ucfirst($doc['status']) ?>
+                            <span class="badge <?= str_replace(' ', '_', $doc['status']) ?> mb-2">
+                                <?= ucfirst(str_replace('_', ' ', $doc['status'])) ?>
                             </span>
-                            <div class="d-grid gap-2">
-                               
+                            <div class="d-grid gap-2 action-buttons">
+                                <a href="<?= $backend_url ?>/download-pdf-file/<?= urlencode($downloadFile) ?>" 
+                                   class="btn btn-sm btn-success">
+                                    <i class="bi bi-download"></i> Download
+                                </a>
+                                <?php if ($doc['status'] === 'ready_for_edit' || $doc['status'] === 'uploaded'): ?>
+                                    <a href="<?= $backend_url ?>/pdf-editor-view?file=<?= urlencode($editFile) ?>&conversion_id=<?= $doc['conversion_id'] ?>" 
+                                       class="btn btn-sm btn-primary" target="_blank">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </a>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -147,7 +178,7 @@ try {
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-          <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">  
+          <input type="hidden" id="currentUserId" name="user_id" value="<?= htmlspecialchars($_SESSION['user_id'] ?? '') ?>">  
           <div class="mb-3">
             <input type="file" class="form-control" name="pdfFile" accept=".pdf" required />
           </div>
@@ -176,101 +207,54 @@ try {
 const BACKEND_URL = "http://localhost:5001";
 
 // PDF Editing Form
-const uploadEditPdfForm = document.getElementById("uploadEditPdfForm");
-if (uploadEditPdfForm) {
-    uploadEditPdfForm.addEventListener("submit", function(e) {
-        e.preventDefault();
+document.getElementById("uploadEditPdfForm").addEventListener("submit", function(e) {
+    e.preventDefault();
 
-        const form = e.target;
-        const formData = new FormData(form);
-        const submitButton = form.querySelector('button[type="submit"]');
-        const loadingDiv = document.getElementById("editPdfLoading");
-        const resultDiv = document.getElementById("editPdfResult");
-        const currentUserId = document.getElementById("currentUserId").value;
+    const form = e.target;
+    const formData = new FormData(form);
+    const submitButton = form.querySelector('button[type="submit"]');
+    const loadingDiv = document.getElementById("editPdfLoading");
+    const resultDiv = document.getElementById("editPdfResult");
+    const currentUserId = document.getElementById("currentUserId").value;
+    
+    loadingDiv.style.display = "block";
+    resultDiv.style.display = "none";
+    submitButton.disabled = true;
+
+    fetch(`${BACKEND_URL}/upload-edit-pdf`, {
+        method: "POST",
+        body: formData,
+    })
+    .then((res) => res.json())
+    .then((data) => {
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        if (!data.pdfFileName) {
+            throw new Error("Server didn't return a valid filename");
+        }
+
+        // Open editor with the returned filename and conversion ID
+        const editorUrl = `${BACKEND_URL}/pdf-editor-view?file=${encodeURIComponent(data.pdfFileName)}&conversion_id=${data.conversionId || ''}`;
+        window.open(editorUrl, "_blank");
         
-        // Show loading, hide result
-        loadingDiv.style.display = "block";
-        resultDiv.style.display = "none";
+        loadingDiv.style.display = "none";
+        resultDiv.style.display = "block";
         
-        // Disable submit button
-        submitButton.disabled = true;
-
-        fetch(`${BACKEND_URL}/upload-edit-pdf`, {
-            method: "POST",
-            body: formData,
-        })
-        .then((res) => res.json())
-        .then((data) => {
-            if (data.error) {
-                // Record failed conversion
-                if (currentUserId) {
-                    fetch(`${BACKEND_URL}/record-conversion`, {
-                        method: "POST",
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            user_id: currentUserId,
-                            conversion_type: 'pdf_editing',
-                            original_filename: formData.get('pdfFile').name,
-                            file_size: formData.get('pdfFile').size,
-                            status: 'failed',
-                            error_message: data.error,
-                            conversion_id: data.conversion_id || null
-                        })
-                    });
-                }
-                
-                throw new Error(data.error);
-            }
-
-            // Ensure we have a valid filename before opening editor
-            if (!data.pdfFileName) {
-                throw new Error("Server didn't return a valid filename");
-            }
-
-            // Open the editor in a new tab with the converted filename
-            const editorUrl = `${BACKEND_URL}/pdf-editor-view?file=${encodeURIComponent(data.pdfFileName)}&user_id=${currentUserId}&conversion_id=${data.conversion_id || ''}`;
-            window.open(editorUrl, "_blank");
-            
-            // Show success message
-            loadingDiv.style.display = "none";
-            resultDiv.style.display = "block";
-            
-            // Close modal after delay and reload
-            setTimeout(() => {
-                bootstrap.Modal.getInstance(document.getElementById('editPdfModal')).hide();
-                window.location.reload();
-            }, 2000);
-        })
-        .catch((err) => {
-            // Record failed conversion
-            if (currentUserId) {
-                fetch(`${BACKEND_URL}/record-conversion`, {
-                    method: "POST",
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        user_id: currentUserId,
-                        conversion_type: 'pdf_editing',
-                        original_filename: formData.get('pdfFile')?.name || 'unknown',
-                        file_size: formData.get('pdfFile')?.size || 0,
-                        status: 'failed',
-                        error_message: err.message
-                    })
-                });
-            }
-            
-            alert("Failed to upload PDF: " + err.message);
-        })
-        .finally(() => {
-            // Reset button state
-            submitButton.disabled = false;
-            loadingDiv.style.display = "none";
-        });
+        setTimeout(() => {
+            bootstrap.Modal.getInstance(document.getElementById('editPdfModal')).hide();
+            window.location.reload();
+        }, 2000);
+    })
+    .catch((err) => {
+        alert("Failed to upload PDF: " + err.message);
+    })
+    .finally(() => {
+        submitButton.disabled = false;
+        loadingDiv.style.display = "none";
     });
-}
+});
 </script>
 </body>
 </html>

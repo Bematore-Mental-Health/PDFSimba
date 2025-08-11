@@ -52,7 +52,23 @@ from docx.enum.style import WD_STYLE_TYPE
 from docx.shared import Pt, Inches
 from docx import Document
 from docx.document import Document as DocxDocument
-
+from flask import Flask, request, jsonify, render_template, send_from_directory
+from werkzeug.utils import secure_filename
+from docx import Document
+from docx.shared import Inches, Pt, RGBColor
+from bs4 import BeautifulSoup
+from pdf2docx import Converter
+import pythoncom
+from win32com.client import Dispatch
+from docx.document import Document as DocumentType
+from docx.oxml.table import CT_Row
+from docx.oxml.text.paragraph import CT_P
+from docx.table import _Cell, Table
+from docx.text.run import Run
+from docx.document import Document as DocumentType
+from docx.table import _Cell
+from docx.text.paragraph import Paragraph
+from PIL import Image as PILImage
 
 
 
@@ -1901,6 +1917,44 @@ def upload_edit_pdf():
             os.remove(docx_path)
         return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/get-pdf-content-for-editing')
+def get_pdf_content_for_editing():
+    try:
+        file_id = request.args.get('file_id')
+        if not file_id:
+            return jsonify({'error': 'Missing file_id parameter'}), 400
+
+        # Clean the filename and extract UUID
+        clean_file_id = secure_filename(file_id)
+        unique_id = clean_file_id.split('_')[0]
+        docx_filename = f"{unique_id}.docx"
+        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], docx_filename)
+        
+        # Verify the file exists
+        if not os.path.exists(docx_path):
+            existing_files = os.listdir(app.config['UPLOAD_FOLDER'])
+            return jsonify({
+                'error': f'Document not found at path: {docx_path}',
+                'looking_for': docx_filename,
+                'existing_files': existing_files
+            }), 404
+
+        # Process the DOCX file
+        doc = Document(docx_path)
+        html_content = process_docx_to_html(doc, unique_id)
+
+        return jsonify({'success': True, 'content': html_content})
+    except Exception as e:
+        app.logger.error(f"Error in get-pdf-content: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/pdf-editor-view')
+def pdf_editor_view():
+    file_id = request.args.get('file')
+    if not file_id:
+        return "Missing file parameter", 400
+    return render_template('editor.html', file_id=file_id)
+
 def process_docx_to_html(doc, unique_id):
     """Convert DOCX to HTML while preserving images and styles"""
     html_parts = []
@@ -1948,47 +2002,10 @@ def process_docx_to_html(doc, unique_id):
             with open(image_path, 'rb') as img_file:
                 img_data = base64.b64encode(img_file.read()).decode('utf-8')
                 img_src = f"data:image/{image_ext};base64,{img_data}"
-                html_parts.append(f'<img src="{img_src}" style="max-width:100%;">')
+                html_parts.append(f'<img src="{img_src}" style="max-width:100%;" data-resized="true">')
 
     return "".join(html_parts)
 
-@app.route('/get-pdf-content-for-editing')
-def get_pdf_content_for_editing():
-    try:
-        file_id = request.args.get('file_id')
-        if not file_id:
-            return jsonify({'error': 'Missing file_id parameter'}), 400
-
-        # Clean the filename and extract UUID
-        clean_file_id = secure_filename(file_id)
-        unique_id = clean_file_id.split('_')[0]
-        docx_filename = f"{unique_id}.docx"
-        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], docx_filename)
-        
-        # Verify the file exists
-        if not os.path.exists(docx_path):
-            existing_files = os.listdir(app.config['UPLOAD_FOLDER'])
-            return jsonify({
-                'error': f'Document not found at path: {docx_path}',
-                'looking_for': docx_filename,
-                'existing_files': existing_files
-            }), 404
-
-        # Process the DOCX file
-        doc = Document(docx_path)
-        html_content = process_docx_to_html(doc, unique_id)
-
-        return jsonify({'success': True, 'content': html_content})
-    except Exception as e:
-        app.logger.error(f"Error in get-pdf-content: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({'error': 'Internal server error'}), 500
-
-@app.route('/pdf-editor-view')
-def pdf_editor_view():
-    file_id = request.args.get('file')
-    if not file_id:
-        return "Missing file parameter", 400
-    return render_template('editor.html', file_id=file_id)
 
 @app.route('/save-edited-pdf', methods=['POST'])
 def save_edited_pdf():
@@ -2005,6 +2022,29 @@ def save_edited_pdf():
         # Clean the filename and extract UUID
         clean_file_id = secure_filename(file_id)
         unique_id = clean_file_id.split('_')[0]
+        
+        # Create BeautifulSoup object and remove duplicates
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Track seen images and remove duplicates
+        seen_images = {}
+        for img in soup.find_all('img'):
+            src = img.get('src', '')
+            if src in seen_images:
+                # Remove duplicate image
+                img.decompose()
+            else:
+                # Mark as resized and keep track
+                img['data-resized'] = 'true'
+                seen_images[src] = img
+                # Ensure width is properly set
+                if 'style' in img.attrs:
+                    style = img['style']
+                    width_match = re.search(r'width:\s*(\d+)px', style)
+                    if width_match:
+                        img['data-width'] = width_match.group(1)
+        
+        cleaned_html = str(soup)
         
         # Create temporary directory for processing
         temp_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{unique_id}")
@@ -2027,8 +2067,8 @@ def save_edited_pdf():
         if 'Heading 2' not in styles:
             styles.add_style('Heading 2', WD_STYLE_TYPE.PARAGRAPH)
         
-        # Parse HTML with BeautifulSoup
-        soup = BeautifulSoup(html_content, 'html.parser')
+        # Parse cleaned HTML with BeautifulSoup
+        soup = BeautifulSoup(cleaned_html, 'html.parser')
         
         # Process all elements in order
         for element in soup.find_all(True):
@@ -2040,7 +2080,17 @@ def save_edited_pdf():
                 para = doc.add_paragraph(style=f'Heading {heading_level}')
                 process_element(element, para, images_dir)
             elif element.name == 'img':
-                add_image_to_doc(element, doc, images_dir)
+                # Only process images that are marked as resized
+                if element.get('data-resized') == 'true':
+                    width = None
+                    if 'data-width' in element.attrs:
+                        width = int(element['data-width'])
+                    elif 'style' in element.attrs:
+                        style = element['style']
+                        width_match = re.search(r'width:\s*(\d+)px', style)
+                        if width_match:
+                            width = int(width_match.group(1))
+                    add_image_to_doc(element, doc, images_dir, width)
             elif element.name in ['ul', 'ol']:
                 process_list(element, doc, images_dir, element.name == 'ol')
             elif element.name == 'table':
@@ -2067,7 +2117,7 @@ def save_edited_pdf():
                 ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', temp_dir, temp_docx_path],
                 capture_output=True,
                 text=True,
-                timeout=180  # 60 second timeout
+                timeout=180
             )
             if result.returncode == 0:
                 success = True
@@ -2126,17 +2176,39 @@ def save_edited_pdf():
         except Exception as e:
             app.logger.error(f"Error cleaning up temp files: {str(e)}")
 
-        return jsonify({'success': True, 'pdfUrl': clean_file_id})
+        return jsonify({
+            'success': True, 
+            'pdfUrl': clean_file_id,
+            'message': 'PDF successfully saved with resized images'
+        })
+        
     except Exception as e:
         app.logger.error(f"Error saving PDF: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({'error': str(e)}), 500
+        # Clean up any created files if error occurred
+        if 'temp_dir' in locals() and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception as cleanup_error:
+                app.logger.error(f"Error during cleanup: {str(cleanup_error)}")
+        return jsonify({
+            'error': str(e),
+            'message': 'Failed to save PDF'
+        }), 500
 
 
 def process_element(element, para, images_dir):
     """Process HTML element with comprehensive style and content handling"""
     for content in element.contents:
         if content.name == 'img':
-            add_image_to_paragraph(content, para, images_dir)
+            # Get dimensions from style or attributes
+            width = None
+            if 'style' in content.attrs:
+                style = content['style']
+                width_match = re.search(r'width:\s*(\d+)px', style)
+                if width_match:
+                    width = int(width_match.group(1))
+            
+            add_image_to_paragraph(content, para, images_dir, width)
         elif content.name == 'span':
             run = para.add_run(content.text)
             apply_styles_to_run(run, content.get('style', ''))
@@ -2173,7 +2245,7 @@ def apply_styles_to_run(run, style_str):
         style_dict[prop] = value
     
     # Apply styles
-    if 'font-weight' in style_dict and style_dict['font-weight'] == 'bold':
+    if 'font-weight' in style_dict and style_dict['font-weight'] in ['bold', 'bolder', '700', '800', '900']:
         run.bold = True
     if 'font-style' in style_dict and style_dict['font-style'] == 'italic':
         run.italic = True
@@ -2229,29 +2301,120 @@ def process_image_element(element, parent, images_dir):
         app.logger.error(f"Error processing image: {str(e)}\n{traceback.format_exc()}")
         raise
 
-def add_image_to_doc(element, doc, images_dir):
-    """Add image directly to document"""
-    process_image_element(element, doc, images_dir)
-
-def add_image_to_paragraph(element, para, images_dir):
-    """Embed an image inside a paragraph from base64 src"""
-    if 'src' not in element.attrs or not element['src'].startswith('data:image'):
-        return
-
+def add_image_to_doc(element, doc, images_dir, width=None, height=None):
+    """Add image directly to document with optional width/height in pixels"""
     try:
+        if 'src' not in element.attrs:
+            return
+            
+        src = element['src']
+        if not src.startswith('data:image'):
+            return
+            
+        # Skip if this image has already been processed
+        if hasattr(element, '_processed'):
+            return
+        element._processed = True
+            
+        # Extract image format from data URL
+        img_format = src.split(';')[0].split('/')[-1]
+        if img_format not in ['png', 'jpeg', 'jpg', 'gif']:
+            img_format = 'png'
+            
+        img_data = src.split('base64,')[-1]
+        img_bytes = base64.b64decode(img_data)
+        img_filename = f"{uuid.uuid4()}.{img_format}"
+        img_path = os.path.join(images_dir, img_filename)
+        
+        with open(img_path, 'wb') as f:
+            f.write(img_bytes)
+        
+        # Convert pixel dimensions to inches (96 DPI standard)
+        width_inches = Inches(width / 96) if width else None
+        height_inches = Inches(height / 96) if height else None
+        
+        # Add image with dimensions if specified
+        if width_inches and height_inches:
+            doc.add_picture(img_path, width=width_inches, height=height_inches)
+        elif width_inches:
+            doc.add_picture(img_path, width=width_inches)
+        elif height_inches:
+            doc.add_picture(img_path, height=height_inches)
+        else:
+            doc.add_picture(img_path)
+            
+    except Exception as e:
+        app.logger.error(f"Error adding image to doc: {str(e)}")
+        raise
+
+def add_image_to_paragraph(element, para, images_dir, width=None):
+    """Embed an image inside a paragraph with optional width in pixels"""
+    try:
+        if 'src' not in element.attrs or not element['src'].startswith('data:image'):
+            return
+
+        # Skip if this is not a resized image
+        if element.get('data-resized') != 'true':
+            return
+
+        # Extract image format from data URL
+        img_format = element['src'].split(';')[0].split('/')[-1]
+        if img_format not in ['png', 'jpeg', 'jpg', 'gif']:
+            img_format = 'png'
+            
         img_data = element['src'].split('base64,')[-1]
         img_bytes = base64.b64decode(img_data)
-        ext = element['src'].split(';')[0].split('/')[-1] or 'png'
-        img_filename = f"{uuid.uuid4()}.{ext}"
+        img_filename = f"{uuid.uuid4()}.{img_format}"
         img_path = os.path.join(images_dir, img_filename)
 
         with open(img_path, 'wb') as f:
             f.write(img_bytes)
 
         run = para.add_run()
-        run.add_picture(img_path)
+        
+        # Convert pixel width to inches if specified
+        width_inches = Inches(width / 96) if width else None
+        
+        if width_inches:
+            run.add_picture(img_path, width=width_inches)
+        else:
+            run.add_picture(img_path)
     except Exception as e:
-        app.logger.error(f"Failed to embed image: {str(e)}")
+        app.logger.error(f"Failed to embed image in paragraph: {str(e)}")
+        raise
+
+
+def add_image_to_paragraph(element, para, images_dir, width=None):
+    """Embed an image inside a paragraph with optional width in pixels"""
+    try:
+        if 'src' not in element.attrs or not element['src'].startswith('data:image'):
+            return
+
+        # Extract image format from data URL
+        img_format = element['src'].split(';')[0].split('/')[-1]
+        if img_format not in ['png', 'jpeg', 'jpg', 'gif']:
+            img_format = 'png'
+            
+        img_data = element['src'].split('base64,')[-1]
+        img_bytes = base64.b64decode(img_data)
+        img_filename = f"{uuid.uuid4()}.{img_format}"
+        img_path = os.path.join(images_dir, img_filename)
+
+        with open(img_path, 'wb') as f:
+            f.write(img_bytes)
+
+        run = para.add_run()
+        
+        # Convert pixel width to inches if specified
+        width_inches = Inches(width / 96) if width else None
+        
+        if width_inches:
+            run.add_picture(img_path, width=width_inches)
+        else:
+            run.add_picture(img_path)
+    except Exception as e:
+        app.logger.error(f"Failed to embed image in paragraph: {str(e)}")
+        raise
 
 def process_image_element(element, parent, images_dir):
     """Process image element"""
@@ -2285,25 +2448,38 @@ def process_list(element, doc, images_dir, is_ordered=False):
             para = doc.add_paragraph(style='List Number')
         else:
             para = doc.add_paragraph(style='List Bullet')
-        process_element(item, para, images_dir)
+        process_element_content(item, para, images_dir)
 
 def process_table(element, doc, images_dir):
-    """Process table elements"""
-    table = doc.add_table(rows=1, cols=1)
-    for row in element.find_all('tr'):
+    """Process table elements with proper structure and images"""
+    # Count rows and columns
+    rows = element.find_all('tr')
+    if not rows:
+        return
+        
+    # Determine number of columns from first row
+    cols = len(rows[0].find_all(['td', 'th']))
+    
+    table = doc.add_table(rows=1, cols=cols)
+    
+    for row_idx, row in enumerate(rows):
         cells = row.find_all(['td', 'th'])
         if not cells:
             continue
             
-        table_row = table.add_row()
-        for i, cell in enumerate(cells):
-            if i >= len(table_row.cells):
+        # Add new row if needed (first row already exists)
+        if row_idx > 0:
+            table.add_row()
+            
+        for col_idx, cell in enumerate(cells):
+            if col_idx >= len(table.rows[row_idx].cells):
                 table.add_column()
-            process_element(cell, table_row.cells[i], images_dir)
+                
+            process_element_content(cell, table.rows[row_idx].cells[col_idx], images_dir)
 
 
 def process_html_to_docx(html_content, doc, unique_id):
-    """Improved HTML to DOCX conversion with better style handling"""
+    """Improved HTML to DOCX conversion with better style handling including image resizing"""
     soup = BeautifulSoup(html_content, 'html.parser')
     images_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_images")
     os.makedirs(images_dir, exist_ok=True)
@@ -2312,28 +2488,82 @@ def process_html_to_docx(html_content, doc, unique_id):
     for element in soup.find_all(True):
         if element.name == 'p':
             para = doc.add_paragraph()
-            self.process_element_content(element, para, images_dir)
+            process_element_content(element, para, images_dir)
         elif element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
             heading_level = int(element.name[1])
             para = doc.add_paragraph(style=f'Heading {heading_level}')
-            self.process_element_content(element, para, images_dir)
+            process_element_content(element, para, images_dir)
         elif element.name == 'img':
-            self.process_image(element, doc, images_dir)
+            # Handle standalone images with width from style or data attributes
+            width = None
+            height = None
+            
+            # Check style attribute first
+            if 'style' in element.attrs:
+                style = element['style']
+                width_match = re.search(r'width:\s*(\d+)px', style)
+                height_match = re.search(r'height:\s*(\d+)px', style)
+                if width_match:
+                    width = int(width_match.group(1))
+                if height_match:
+                    height = int(height_match.group(1))
+            
+            # Fallback to data attributes if no style
+            if not width and 'data-width' in element.attrs:
+                width = int(element['data-width'])
+            if not height and 'data-height' in element.attrs:
+                height = int(element['data-height'])
+            
+            add_image_to_doc(element, doc, images_dir, width, height)
         elif element.name in ['ul', 'ol']:
-            self.process_list(element, doc, images_dir, element.name == 'ol')
+            process_list(element, doc, images_dir, element.name == 'ol')
         elif element.name == 'table':
-            self.process_table(element, doc, images_dir)
+            process_table(element, doc, images_dir)
+        elif element.name == 'div':
+            # Handle div containers (common in summernote output)
+            for child in element.children:
+                if child.name == 'img':
+                    width = None
+                    if 'style' in child.attrs:
+                        style = child['style']
+                        width_match = re.search(r'width:\s*(\d+)px', style)
+                        if width_match:
+                            width = int(width_match.group(1))
+                    add_image_to_doc(child, doc, images_dir, width)
+                elif child.name:
+                    # Recursively process other elements
+                    process_html_to_docx(str(child), doc, unique_id)
 
 def process_element_content(element, para, images_dir):
-    """Process content within an element with styles"""
+    """Process content within an element with styles and images"""
     for content in element.contents:
         if content.name == 'img':
-            self.process_image(content, para, images_dir)
+            # Handle inline images with width
+            width = None
+            if 'style' in content.attrs:
+                style = content['style']
+                width_match = re.search(r'width:\s*(\d+)px', style)
+                if width_match:
+                    width = int(width_match.group(1))
+            add_image_to_paragraph(content, para, images_dir, width)
         elif content.name == 'span':
             run = para.add_run(content.text)
-            self.apply_styles(run, content.get('style', ''))
+            apply_styles_to_run(run, content.get('style', ''))
+        elif content.name in ['b', 'strong']:
+            run = para.add_run(content.text)
+            run.bold = True
+        elif content.name in ['i', 'em']:
+            run = para.add_run(content.text)
+            run.italic = True
+        elif content.name == 'u':
+            run = para.add_run(content.text)
+            run.underline = True
+        elif content.name == 'br':
+            para.add_run().add_break()
         elif content.name is None:  # Text node
-            para.add_run(str(content))
+            text = str(content).replace('\n', ' ')
+            if text.strip():
+                para.add_run(text)
 
 from docx.shared import RGBColor
 
@@ -2396,11 +2626,14 @@ def upload_image():
         image_path = os.path.join(app.config['UPLOAD_FOLDER'], image_filename)
         file.save(image_path)
         
-        # Return URL or base64 data
+        # Return URL with resized marker
         with open(image_path, 'rb') as img_file:
             img_data = base64.b64encode(img_file.read()).decode('utf-8')
             img_src = f"data:image/{filename.split('.')[-1]};base64,{img_data}"
-            return jsonify({'url': img_src})
+            return jsonify({
+                'url': img_src,
+                'resized': True
+            })
             
     except Exception as e:
         return jsonify({'error': str(e)}), 500

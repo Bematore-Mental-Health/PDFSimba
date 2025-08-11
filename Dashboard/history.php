@@ -30,7 +30,19 @@ try {
         die("You must be logged in to view conversion history");
     }
 
-    $stmt = $db->prepare('SELECT * FROM conversions WHERE user_id = :user_id ORDER BY timestamp DESC');
+    // Get all conversions for this user, including parent-child relationships
+    $query = '
+        SELECT 
+            c.*,
+            p.original_filename as parent_original_filename,
+            p.converted_filename as parent_converted_filename
+        FROM conversions c
+        LEFT JOIN conversions p ON c.parent_conversion_id = p.conversion_id
+        WHERE c.user_id = :user_id 
+        ORDER BY c.timestamp DESC
+    ';
+    
+    $stmt = $db->prepare($query);
     $stmt->bindValue(':user_id', $user_id, SQLITE3_TEXT);
     
     $result = $stmt->execute();
@@ -91,13 +103,35 @@ if (isset($_GET['download']) && !empty($_GET['download'])) {
     <title>PDFSimba | Conversion History</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
-      <link rel="shortcut icon" href="../Media/book3.png" type="image/x-icon">
-  <link rel="stylesheet" href="../CSS/dashboard.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
+    <link rel="shortcut icon" href="../Media/book3.png" type="image/x-icon">
+    <link rel="stylesheet" href="../CSS/dashboard.css">
     <style>
         .badge.completed { background-color: #28a745; }
         .badge.failed { background-color: #dc3545; }
+        .badge.uploaded { background-color: #17a2b8; }
+        .badge.processed { background-color: #6c757d; }
+        .conversion-chain {
+            border-left: 3px solid #dee2e6;
+            padding-left: 15px;
+            margin-left: 10px;
+        }
+        .conversion-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .conversion-item:hover {
+            background-color: #e9ecef;
+        }
+        .conversion-type {
+            font-weight: bold;
+        }
+        .conversion-details {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
@@ -132,53 +166,116 @@ include 'header-sidebar.php';
         <?php if (empty($conversions)): ?>
             <div class="alert alert-info">No conversion history found</div>
         <?php else: ?>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Original File</th>
-                        <th>Converted File</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($conversions as $conv): ?>
-                    <tr>
-                        <td><?= htmlspecialchars($conv['timestamp'] ?? 'N/A') ?></td>
-                        <td><?= htmlspecialchars(str_replace('_', ' ', $conv['conversion_type'] ?? 'N/A')) ?></td>
-                        <td><?= htmlspecialchars($conv['original_filename'] ?? 'N/A') ?></td>
-                        <td>
-                            <?php if (($conv['status'] ?? '') === 'completed' && !empty($conv['converted_filename'])): ?>
-                                <?php 
-                                $filePath = __DIR__ . '/CONVERTED/' . $conv['converted_filename'];
-                                $fileExists = file_exists($filePath);
-                                ?>
-                                <?php if ($fileExists): ?>
-                                    <a href="?download=<?= urlencode($conv['converted_filename']) ?>" class="btn btn-sm btn-success">
-                                        Download
-                                    </a>
-                                <?php else: ?>
-                                    <button class="btn btn-sm btn-secondary" onclick="showUnavailableModal()">
-                                        Download
-                                    </button>
-                                <?php endif; ?>
-                            <?php else: ?>
-                            N/A
+            <div class="conversion-list">
+                <?php 
+                // Group conversions by parent-child relationships
+                $groupedConversions = [];
+                foreach ($conversions as $conv) {
+                    if (empty($conv['parent_conversion_id'])) {
+                        // This is a parent conversion
+                        $groupedConversions[$conv['conversion_id']] = [
+                            'parent' => $conv,
+                            'children' => []
+                        ];
+                    }
+                }
+                
+                // Add children to their parents
+                foreach ($conversions as $conv) {
+                    if (!empty($conv['parent_conversion_id']) && isset($groupedConversions[$conv['parent_conversion_id']])) {
+                        $groupedConversions[$conv['parent_conversion_id']]['children'][] = $conv;
+                    }
+                }
+                
+                // Display the grouped conversions
+                foreach ($groupedConversions as $group): 
+                    $parent = $group['parent'];
+                    $children = $group['children'];
+                ?>
+                    <div class="conversion-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="conversion-type">
+                                    <?= htmlspecialchars(ucwords(str_replace('_', ' ', $parent['conversion_type']))) ?>
+                                </span>
+                                <span class="badge <?= $parent['status'] ?> ms-2">
+                                    <?= ucfirst($parent['status']) ?>
+                                </span>
+                            </div>
+                            <small class="text-muted">
+                                <?= htmlspecialchars($parent['timestamp']) ?>
+                            </small>
+                        </div>
+                        <div class="conversion-details mt-2">
+                            <div>
+                                <strong>Original:</strong> <?= htmlspecialchars($parent['original_filename']) ?>
+                            </div>
+                            <?php if (!empty($parent['converted_filename'])): ?>
+                                <div>
+                                    <strong>Converted:</strong> 
+                                    <?php 
+                                    $filePath = __DIR__ . '/CONVERTED/' . $parent['converted_filename'];
+                                    $fileExists = file_exists($filePath);
+                                    ?>
+                                    <?php if ($fileExists): ?>
+                                        <a href="?download=<?= urlencode($parent['converted_filename']) ?>" class="btn btn-sm btn-success ms-2">
+                                            <i class="bi bi-download"></i> Download
+                                        </a>
+                                    <?php else: ?>
+                                        <button class="btn btn-sm btn-secondary ms-2" onclick="showUnavailableModal()">
+                                            <i class="bi bi-download"></i> Download
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
                             <?php endif; ?>
-                        </td>
-                        <td>
-                            <span class="badge <?= ($conv['status'] ?? '') === 'completed' ? 'completed' : 'failed' ?>">
-                                <?= ucfirst($conv['status'] ?? 'unknown') ?>
-                            </span>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                        </div>
+                        
+                        <?php if (!empty($children)): ?>
+                            <div class="conversion-chain mt-3">
+                                <?php foreach ($children as $child): ?>
+                                    <div class="conversion-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <span class="conversion-type">
+                                                    <?= htmlspecialchars(ucwords(str_replace('_', ' ', $child['conversion_type']))) ?>
+                                                </span>
+                                                <span class="badge <?= $child['status'] ?> ms-2">
+                                                    <?= ucfirst($child['status']) ?>
+                                                </span>
+                                            </div>
+                                            <small class="text-muted">
+                                                <?= htmlspecialchars($child['timestamp']) ?>
+                                            </small>
+                                        </div>
+                                        <div class="conversion-details mt-2">
+                                            <?php if (!empty($child['converted_filename'])): ?>
+                                                <div>
+                                                    <strong>Result:</strong> 
+                                                    <?php 
+                                                    $filePath = __DIR__ . '/CONVERTED/' . $child['converted_filename'];
+                                                    $fileExists = file_exists($filePath);
+                                                    ?>
+                                                    <?php if ($fileExists): ?>
+                                                        <a href="?download=<?= urlencode($child['converted_filename']) ?>" class="btn btn-sm btn-success ms-2">
+                                                            <i class="bi bi-download"></i> Download
+                                                        </a>
+                                                    <?php else: ?>
+                                                        <button class="btn btn-sm btn-secondary ms-2" onclick="showUnavailableModal()">
+                                                            <i class="bi bi-download"></i> Download
+                                                        </button>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         <?php endif; ?>
     </div>
-
 
     <script src="./JS/toggle.js"></script>
     <!-- Bootstrap JS -->

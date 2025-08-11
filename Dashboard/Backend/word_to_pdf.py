@@ -1,40 +1,48 @@
 import os
 import uuid
-import comtypes.client
-import comtypes
-from flask import jsonify
+import subprocess
 
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, '..', 'uploads'))
-OUTPUT_FOLDER = os.path.abspath(os.path.join(BASE_DIR, '..', 'converted'))
-
-def convert_word_file(file):
+def convert_word_file(file, upload_folder, output_folder):
+    """Convert Word document to PDF using LibreOffice"""
     if not file:
-        return jsonify({'error': 'No file uploaded'}), 400
+        return {'error': 'No file uploaded'}, 400
 
     ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ['.doc', '.docx']:
-        return jsonify({'error': 'Unsupported file format'}), 400
+    if ext not in ['.doc', '.docx', '.odt', '.rtf']:
+        return {'error': 'Unsupported file format'}, 400
 
+    # Generate unique filenames
     filename = f"{uuid.uuid4()}{ext}"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    filepath = os.path.join(upload_folder, filename)
+    pdf_filename = f"{os.path.splitext(filename)[0]}.pdf"
+    pdf_filepath = os.path.join(output_folder, pdf_filename)
+
+    # Save the uploaded file
     file.save(filepath)
 
-    pdf_filename = f"{os.path.splitext(filename)[0]}.pdf"
-    pdf_filepath = os.path.join(OUTPUT_FOLDER, pdf_filename)
-
+    # Convert using LibreOffice
     try:
-        comtypes.CoInitialize()
-        word = comtypes.client.CreateObject('Word.Application')
-        word.Visible = False
-        doc = word.Documents.Open(filepath)
-        doc.SaveAs(pdf_filepath, FileFormat=17)
-        doc.Close()
-        word.Quit()
-    finally:
-        comtypes.CoUninitialize()
+        result = subprocess.run(
+            ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', output_folder, filepath],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=30
+        )
+        
+        # Verify conversion was successful
+        if not os.path.exists(pdf_filepath):
+            return {'error': 'Conversion failed - no output file generated'}, 500
 
-    return jsonify({'pdf_path': f"converted/{pdf_filename}"})
+        return {
+            'pdf_path': f"converted/{pdf_filename}",
+            'original_filename': file.filename,
+            'converted_filename': pdf_filename
+        }
 
-
+    except subprocess.TimeoutExpired:
+        return {'error': 'Conversion timed out'}, 500
+    except subprocess.CalledProcessError as e:
+        return {'error': f"Conversion failed: {e.stderr.decode('utf-8', errors='ignore')}"}, 500
+    except Exception as e:
+        return {'error': str(e)}, 500
