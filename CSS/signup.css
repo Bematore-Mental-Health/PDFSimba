@@ -1,0 +1,109 @@
+body, html {
+      height: 100%;
+      margin: 0;
+      background-color: #f8f9fa;
+      background: url(../Media/greenbg1.jpg) no-repeat center;
+      background-size: cover;
+      font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+    }
+
+    .container-signup {
+      max-width: 750px;
+      margin: auto;
+      height: 73vh;
+      display: flex;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 0 30px rgba(0,0,0,0.1);
+      background-color: #fff;
+      margin-top: 7%;
+    }
+
+  .left-panel {
+  flex: 1;
+  background: url('../Media/remoteteam.jpeg') center/cover no-repeat;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px;
+  position: relative; 
+  z-index: 1;
+  border-bottom-right-radius: 25px;
+  border-top-right-radius: 25px;
+}
+
+.left-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.555); 
+  z-index: 0;
+  border-bottom-right-radius: 25px;
+  border-top-right-radius: 25px;
+}
+
+    .left-panel h2 {
+      font-size: 2.5rem;
+      font-weight: bold;
+    }
+
+    .right-panel {
+      flex: 1;
+      padding: 60px 40px;
+      background-color: #fff;
+    }
+
+    .right-panel h3 {
+      font-weight: bold;
+      margin-bottom: 30px;
+    }
+
+    .form-control {
+      background-color: #f1f1f1;
+      border: none;
+      border: #000 solid 1px;
+      height: 45px;
+      padding-left: 15px;
+    }
+
+    .form-check-label {
+      font-size: 0.9rem;
+    }
+
+    .form-check-input{
+      border: #000 solid 1px;
+    }
+    
+    a{
+        text-decoration: none;
+        color: #000;
+    }
+    .btn-join {
+      background-color: #000;
+      color: white;
+      width: 100%;
+      height: 45px;
+      border-radius: 5px;
+      margin-top: 3%;
+    }
+
+    .btn-join:hover {
+      background-color: #272626;
+      color: white;
+    }
+
+    @media (max-width: 768px) {
+      .container-signup {
+        flex-direction: column;
+        height: auto;
+      }
+      .left-panel, .right-panel {
+        flex: none;
+        width: 100%;
+      }
+      .left-panel {
+        text-align: center;
+        padding: 60px 20px;
+      }
+    }
