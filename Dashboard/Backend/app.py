@@ -35,7 +35,6 @@ import base64
 import re
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
-from docx import Document
 from pdf2docx import Converter
 from win32com.client import Dispatch
 from werkzeug.utils import secure_filename
@@ -52,21 +51,6 @@ from docx.enum.style import WD_STYLE_TYPE
 from docx.shared import Pt, Inches
 from docx import Document
 from docx.document import Document as DocxDocument
-from docx import Document
-from docx.shared import Inches, Pt, RGBColor
-from bs4 import BeautifulSoup
-from pdf2docx import Converter
-import pythoncom
-from win32com.client import Dispatch
-from docx.document import Document as DocumentType
-from docx.oxml.table import CT_Row
-from docx.oxml.text.paragraph import CT_P
-from docx.table import _Cell, Table
-from docx.text.run import Run
-from docx.document import Document as DocumentType
-from docx.table import _Cell
-from docx.text.paragraph import Paragraph
-from PIL import Image as PILImage
 
 
 
@@ -75,11 +59,9 @@ from flask import Flask, request, jsonify, send_from_directory, send_file, rende
 from pdf2image import convert_from_path
 from pptx import Presentation
 from pptx.util import Inches
-import base64
 from io import BytesIO
 from flask import Flask, request, jsonify, send_file, make_response
 from PyPDF2 import PdfMerger
-import base64
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from flask import Flask, request, jsonify, g
@@ -88,6 +70,12 @@ import requests
 import pytesseract
 import ocrmypdf
 import pdfplumber
+from docx import Document
+from docx.shared import Inches
+import io
+from flask import Flask, request, jsonify, send_from_directory
+from htmldocx import HtmlToDocx
+
 
 
 
@@ -103,6 +91,7 @@ from pdf_to_png import convert_pdf_to_png
 from pdf_to_pdfa import convert_to_pdfa
 from merge_pdfs import merge_pdfs
 from split_pdfs import  split_pdf_logic
+
 
 
 
@@ -540,27 +529,65 @@ def convert_pdf_to_word_route():
 
         base_name = os.path.splitext(filename)[0]
         html_filename = f"{base_name}.html"
+        editor_html_filename = f"editor_{base_name}.html"
         docx_filename = f"{base_name}.docx"
         html_path = os.path.join(OUTPUT_FOLDER, html_filename)
+        editor_html_path = os.path.join(OUTPUT_FOLDER, editor_html_filename)
         docx_path = os.path.join(OUTPUT_FOLDER, docx_filename)
 
         try:
-            reader = PdfReader(input_path)
-            text = ''
-            for page in reader.pages:
-                text += page.extract_text() or ""
-
-            html_content = f"<html><body>{text.replace('\n', '<br>')}</body></html>"
-
-            # Save HTML for preview
+            # Create a Word document
+            doc = Document()
+            
+            # Convert PDF to images (one per page)
+            images = convert_from_path(input_path)
+            
+            html_content = "<html><body>"
+            editor_html_content = "<html><body>"
+            
+            for i, image in enumerate(images):
+                # Save image temporarily
+                img_path = os.path.join(UPLOAD_FOLDER, f"temp_{i}.jpg")
+                image.save(img_path, 'JPEG')
+                
+                # Extract text from image using OCR
+                text = pytesseract.image_to_string(Image.open(img_path))
+                
+                # Add text to Word document
+                if text.strip():
+                    doc.add_paragraph(text)
+                
+                # Add image to Word document
+                doc.add_picture(img_path, width=Inches(6))
+                
+                # Add page break if not last page
+                if i < len(images) - 1:
+                    doc.add_page_break()
+                
+                # Build HTML content for preview (with images)
+                html_content += f"<div><p>{text.replace('\n', '<br>')}</p>"
+                html_content += f"<img src='data:image/jpeg;base64,{image_to_base64(image)}' style='max-width: 100%;'/></div>"
+                
+                # Build HTML for editor (without images)
+                editor_html_content += f"<div><p>{text.replace('\n', '<br>')}</p>"
+                editor_html_content += f"<div class='image-placeholder' style='border: 1px dashed #ccc; padding: 10px; margin: 10px 0;'>[Image - preserved in final document]</div></div>"
+                
+                # Clean up temp image
+                os.remove(img_path)
+            
+            html_content += "</body></html>"
+            editor_html_content += "</body></html>"
+            
+            # Save both HTML versions
             with open(html_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
-
-            # Convert to DOCX using html2docx
-            buffer = html2docx(html_content, title="Converted PDF")
-            with open(docx_path, "wb") as f:
-                f.write(buffer.getvalue())
-
+            
+            with open(editor_html_path, 'w', encoding='utf-8') as f:
+                f.write(editor_html_content)
+            
+            # Save Word document
+            doc.save(docx_path)
+            
             return jsonify({
                 'word_path': f"converted/{html_filename}",
                 'word_docx_path': f"converted/{docx_filename}",
@@ -578,6 +605,12 @@ def convert_pdf_to_word_route():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def image_to_base64(image):
+    """Convert PIL image to base64 string"""
+    buffered = io.BytesIO()
+    image.save(buffered, format="JPEG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
 @app.route('/editor/<filename>')
 def edit_word_document(filename):
@@ -600,19 +633,21 @@ def edit_word_document(filename):
           border-radius: 10px;
           box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }}
+        .image-placeholder {{
+          background-color: #f8f9fa;
+          color: #6c757d;
+          text-align: center;
+        }}
       </style>
     </head>
     <body>
       <div class="container">
         <div class="editor-container">
           <h3 class="mb-4">Edit Your Word Document</h3>
-          <br>
-          <form method="POST" action="/dashapi/save-edited-word/{filename}">
-          <button class="btn btn-success" type="submit">Save and Download</button> 
-
+          
+          <form method="POST" action="/save-edited-word/{filename}">
+            <button class="btn btn-success mb-3" type="submit">Save and Download</button> 
             <textarea id="editor" name="content"></textarea>
-            <br>
-            
           </form>
         </div>
       </div>
@@ -620,55 +655,125 @@ def edit_word_document(filename):
       <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
- 
 
       <script>
-        fetch("/dashapi/converted/{filename}")
-          .then(response => response.text())
-          .then(content => {{
-            $('#editor').summernote({{
-              height: 500,
-              tabsize: 2
+        $(document).ready(function() {{
+          fetch("/converted/editor_{filename}")
+            .then(response => {{
+              if (!response.ok) throw new Error('Failed to load content');
+              return response.text();
+            }})
+            .then(content => {{
+              $('#editor').summernote({{
+                height: 500,
+                tabsize: 2,
+                toolbar: [
+                  ['style', ['bold', 'italic', 'underline', 'clear']],
+                  ['font', ['strikethrough', 'superscript', 'subscript']],
+                  ['fontsize', ['fontsize']],
+                  ['color', ['color']],
+                  ['para', ['ul', 'ol', 'paragraph']],
+                  ['insert', ['link']],  // No image upload option
+                  ['view', ['fullscreen', 'codeview', 'help']]
+                ]
+              }});
+              $('#editor').summernote('code', content);
+            }})
+            .catch(error => {{
+              console.error('Error:', error);
+              $('#editor').summernote({{
+                height: 500,
+                tabsize: 2
+              }});
+              $('#editor').summernote('code', '<p>Document loaded without images for better performance</p>');
             }});
-            $('#editor').summernote('code', content);
-          }});
+        }});
       </script>
     </body>
     </html>
     """
 
-
 @app.route('/save-edited-word/<filename>', methods=['POST'])
 def save_edited_word(filename):
     content = request.form.get('content')
-    output_docx = os.path.join(OUTPUT_FOLDER, f"edited_{filename.replace('.html', '')}.docx")
+    if not content:
+        return "No content provided", 400
 
     try:
-        # Convert HTML content to .docx with a title
-        docx_content = html2docx(content, title="Edited Document")
+        # Load the original HTML with images
+        original_html_path = os.path.join(OUTPUT_FOLDER, filename)
+        if not os.path.exists(original_html_path):
+            return "Original document not found", 404
 
-        # Write the actual bytes from the BytesIO buffer
-        with open(output_docx, "wb") as f:
-            f.write(docx_content.getvalue())
+        with open(original_html_path, 'r', encoding='utf-8') as f:
+            original_html = f.read()
 
-        return send_from_directory(OUTPUT_FOLDER, os.path.basename(output_docx), as_attachment=True)
+        # Parse both HTML contents
+        edited_soup = BeautifulSoup(content, 'html.parser')
+        original_soup = BeautifulSoup(original_html, 'html.parser')
+
+        # Replace placeholders with original images
+        edited_placeholders = edited_soup.select('.image-placeholder')
+        original_images = original_soup.select('img')
+
+        if len(edited_placeholders) != len(original_images):
+            return "Mismatch between edited content and original images", 400
+
+        for placeholder, img in zip(edited_placeholders, original_images):
+            placeholder.replace_with(img)
+
+        # Create the final document
+        doc = Document()
+        new_parser = HtmlToDocx()
+        new_parser.add_html_to_document(str(edited_soup), doc)
+
+        # Save the document
+        output_filename = f"edited_{os.path.splitext(filename)[0]}.docx"
+        output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+        doc.save(output_path)
+
+        return send_from_directory(
+            OUTPUT_FOLDER,
+            output_filename,
+            as_attachment=True,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+
     except Exception as e:
         return f"Error saving Word file: {str(e)}", 500
         
 # PDF to Excel
+import os
+import uuid
+import bisect
+from collections import Counter
+from flask import request, jsonify
+import pandas as pd
+from PyPDF2 import PdfReader
+from pdf2image import convert_from_path
+import pytesseract
+from PIL import Image
+try:
+    import camelot
+    CAMELOT_AVAILABLE = True
+except ImportError:
+    CAMELOT_AVAILABLE = False
+
 @app.route('/convert-pdf-to-excel', methods=['POST'])
 def convert_pdf_to_excel():
-    # Get form data including user_id
     file = request.files.get('pdf_file')
     user_id = request.form.get('user_id')
-    conversion_id = str(uuid.uuid4())  # Generate a unique conversion ID
+    conversion_id = str(uuid.uuid4())
     
     if not file:
-        # Return error if no file uploaded (frontend will handle recording)
         return jsonify({
             'error': 'No file uploaded',
             'conversion_id': conversion_id
         }), 400
+
+    # Create necessary directories if they don't exist
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
     filename = f"{uuid.uuid4()}.pdf"
     input_path = os.path.join(UPLOAD_FOLDER, filename)
@@ -678,19 +783,84 @@ def convert_pdf_to_excel():
     output_path = os.path.join(OUTPUT_FOLDER, output_filename)
 
     try:
-        # Original conversion logic remains unchanged
-        reader = PdfReader(input_path)
-        text = ''.join(page.extract_text() or "" for page in reader.pages)
-        lines = text.splitlines()
-        data = [line.split() for line in lines if line.strip()]
-        df = pd.DataFrame(data)
-        df.to_excel(output_path, index=False, header=False)
+        # First try direct text extraction
+        try:
+            with open(input_path, 'rb') as f:
+                reader = PdfReader(f)
+                text = ''.join(page.extract_text() or "" for page in reader.pages)
+                
+                if text.strip():
+                    # Try to detect tabular structure
+                    if '\t' in text or any(len(line.split()) > 3 for line in text.splitlines()):
+                        rows = [line.split('\t') if '\t' in line else line.split() 
+                               for line in text.splitlines() if line.strip()]
+                    else:
+                        # Plain text - each paragraph becomes a row
+                        rows = [[paragraph] for paragraph in text.split('\n\n') if paragraph.strip()]
+                    
+                    pd.DataFrame(rows).to_excel(output_path, index=False, header=False)
+                    return jsonify({
+                        'excel_filename': output_filename,
+                        'conversion_id': conversion_id,
+                        'original_filename': file.filename
+                    })
+        except Exception as e:
+            print(f"Direct extraction failed: {str(e)}")
 
-        return jsonify({
-            'excel_filename': output_filename,
-            'conversion_id': conversion_id,
-            'original_filename': file.filename
-        })
+        # If Camelot is available, try table extraction
+        if CAMELOT_AVAILABLE:
+            try:
+                tables = camelot.read_pdf(input_path, flavor='lattice', pages='all')
+                if tables and len(tables) > 0:
+                    df = pd.concat([t.df for t in tables])
+                    df.to_excel(output_path, index=False, header=False)
+                    return jsonify({
+                        'excel_filename': output_filename,
+                        'conversion_id': conversion_id,
+                        'original_filename': file.filename
+                    })
+            except Exception as e:
+                print(f"Camelot extraction failed: {str(e)}")
+
+        # Fall back to OCR
+        try:
+            images = convert_from_path(input_path)
+            all_rows = []
+            
+            for i, image in enumerate(images):
+                img_path = os.path.join(UPLOAD_FOLDER, f"temp_{i}.jpg")
+                image.save(img_path, 'JPEG')
+                
+                # Try table detection
+                try:
+                    ocr_data = pytesseract.image_to_data(
+                        Image.open(img_path),
+                        config='--psm 6',
+                        output_type=pytesseract.Output.DICT
+                    )
+                    rows = process_ocr_to_table(ocr_data)
+                    if len(rows) > 1:  # If we found a table structure
+                        all_rows.extend(rows)
+                        continue
+                except Exception as e:
+                    print(f"OCR table detection failed: {str(e)}")
+                
+                # Fall back to line-by-line extraction
+                text = pytesseract.image_to_string(Image.open(img_path))
+                if text.strip():
+                    all_rows.extend([[line] for line in text.splitlines() if line.strip()])
+                
+                os.remove(img_path)
+            
+            pd.DataFrame(all_rows).to_excel(output_path, index=False, header=False)
+            return jsonify({
+                'excel_filename': output_filename,
+                'conversion_id': conversion_id,
+                'original_filename': file.filename
+            })
+        except Exception as e:
+            print(f"OCR extraction failed: {str(e)}")
+            raise
 
     except Exception as e:
         return jsonify({
@@ -698,9 +868,44 @@ def convert_pdf_to_excel():
             'conversion_id': conversion_id
         }), 500
     finally:
-        # Clean up the input file
         if os.path.exists(input_path):
             os.remove(input_path)
+
+def process_ocr_to_table(ocr_data):
+    """Convert OCR output to table structure preserving alignment"""
+    # Group by line and word position
+    lines = {}
+    for i in range(len(ocr_data['text'])):
+        if ocr_data['text'][i].strip():
+            line_num = ocr_data['line_num'][i]
+            left_pos = ocr_data['left'][i]
+            if line_num not in lines:
+                lines[line_num] = []
+            lines[line_num].append((left_pos, ocr_data['text'][i]))
+    
+    if not lines:
+        return []
+    
+    # Find common left positions as column dividers
+    all_positions = [pos for line in lines.values() for pos, _ in line]
+    position_counts = Counter(all_positions)
+    common_positions = [pos for pos, cnt in position_counts.most_common(5) if cnt > 1]
+    common_positions.sort()
+    
+    # Create table data
+    table_data = []
+    for line_num in sorted(lines.keys()):
+        row = [''] * len(common_positions) if common_positions else []
+        for pos, text in lines[line_num]:
+            if common_positions:
+                col = bisect.bisect_right(common_positions, pos) - 1
+                if 0 <= col < len(row):
+                    row[col] = text if not row[col] else row[col] + ' ' + text
+            else:
+                row.append(text)
+        table_data.append(row)
+    
+    return table_data
 
 @app.route('/download/<filename>')
 def download_excel(filename):
@@ -726,30 +931,44 @@ def edit_excel(filename):
         <style>
             body {{ margin: 20px; font-family: sans-serif; background-color: #f9f9f9; }}
             #excelEditor {{ width: 100%; height: 500px; margin-bottom: 20px; }}
+            .ht_master .wtHolder {{ height: 500px !important; }}
         </style>
     </head>
     <body>
-        <h2>Edit Excel File</h2>
-        <button onclick="downloadExcel()" class="btn btn-success mb-2">Save and Download</button>
-
-        <div id="excelEditor"></div>
+        <div class="container">
+            <h2>Edit Excel File</h2>
+            <button onclick="downloadExcel()" class="btn btn-success mb-2">Save and Download</button>
+            <div id="excelEditor"></div>
+        </div>
 
         <script>
             let container = document.getElementById('excelEditor');
             let hot;
 
-            fetch("/dashapi/converted/{filename}")
+            fetch("/converted/{filename}")
                 .then(res => res.arrayBuffer())
                 .then(buffer => {{
                     const workbook = XLSX.read(buffer, {{ type: "array" }});
                     const ws = workbook.Sheets[workbook.SheetNames[0]];
                     const data = XLSX.utils.sheet_to_json(ws, {{ header: 1 }});
+                    
                     hot = new Handsontable(container, {{
                         data: data,
                         rowHeaders: true,
                         colHeaders: true,
-                        licenseKey: 'non-commercial-and-evaluation'
+                        width: '100%',
+                        height: 500,
+                        licenseKey: 'non-commercial-and-evaluation',
+                        manualColumnResize: true,
+                        manualRowResize: true,
+                        contextMenu: true,
+                        filters: true,
+                        dropdownMenu: true
                     }});
+                }})
+                .catch(error => {{
+                    console.error('Error loading Excel:', error);
+                    container.innerHTML = '<div class="alert alert-danger">Error loading Excel file</div>';
                 }});
 
             function downloadExcel() {{
@@ -1680,22 +1899,50 @@ import comtypes.client
 @app.route('/upload-signing-document', methods=['POST'])
 def upload_signing_document():
     file = request.files.get('document_file')
+    user_id = request.form.get('user_id')
+    
     if not file:
         return jsonify({"error": "No file provided"}), 400
 
     filename = secure_filename(file.filename)
     file_ext = os.path.splitext(filename)[1].lower()
+    file_size = os.fstat(file.stream.fileno()).st_size
     
     # Create a unique filename to avoid conflicts
     unique_id = str(uuid.uuid4())
     temp_filename = f"{unique_id}{file_ext}"
-    temp_path = os.path.join(UPLOAD_FOLDER, temp_filename)
+    temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
     file.save(temp_path)
+
+    # Record the initial document upload in database
+    conversion_id = str(uuid.uuid4())
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("""
+            INSERT INTO conversions 
+            (user_id, conversion_type, original_filename, converted_filename, 
+             file_size, status, conversion_id, parent_conversion_id) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id,
+            'document_signing_upload',
+            filename,
+            None,  # Will be updated after signing
+            file_size,
+            'uploaded',  # Initial status
+            conversion_id,
+            None  # No parent for initial upload
+        ))
+        db.commit()
+    except Exception as e:
+        app.logger.error(f"Failed to record document upload: {str(e)}")
+        return jsonify({"error": "Database error"}), 500
 
     # Convert Word to PDF if needed
     if file_ext in ['.doc', '.docx']:
         pdf_filename = f"{unique_id}.pdf"
-        pdf_path = os.path.join(UPLOAD_FOLDER, pdf_filename)
+        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename)
         
         # Try multiple conversion methods with fallbacks
         conversion_success = False
@@ -1703,15 +1950,15 @@ def upload_signing_document():
         # Method 1: Try LibreOffice first (fastest)
         try:
             result = subprocess.run(
-                ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', UPLOAD_FOLDER, temp_path],
+                ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', app.config['UPLOAD_FOLDER'], temp_path],
                 capture_output=True,
                 text=True,
-                timeout=60  # 60 second timeout
+                timeout=180
             )
             if result.returncode == 0:
                 conversion_success = True
                 # LibreOffice creates output with same name but .pdf extension
-                temp_pdf_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}.pdf")
+                temp_pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}.pdf")
                 if os.path.exists(temp_pdf_path):
                     os.rename(temp_pdf_path, pdf_path)
         except Exception as e:
@@ -1729,7 +1976,7 @@ def upload_signing_document():
         # Method 3: Fallback to Word COM if other methods fail
         if not conversion_success:
             try:
-                comtypes.CoInitialize()
+                pythoncom.CoInitialize()
                 word = comtypes.client.CreateObject('Word.Application')
                 word.Visible = False
                 doc = word.Documents.Open(temp_path)
@@ -1739,9 +1986,20 @@ def upload_signing_document():
                 conversion_success = True
             except Exception as e:
                 app.logger.error(f"Word COM conversion failed: {str(e)}")
+                # Update database with failure
+                if user_id:
+                    try:
+                        cursor.execute("""
+                            UPDATE conversions SET status=?, error_message=?
+                            WHERE conversion_id=?
+                        """, ('failed', str(e), conversion_id))
+                        db.commit()
+                    except Exception as db_error:
+                        app.logger.error(f"Failed to update conversion record: {str(db_error)}")
+                
                 return jsonify({"error": "Failed to convert Word document"}), 500
             finally:
-                comtypes.CoUninitialize()
+                pythoncom.CoUninitialize()
 
         # Clean up original Word file
         os.remove(temp_path)
@@ -1749,26 +2007,35 @@ def upload_signing_document():
         if not conversion_success:
             return jsonify({"error": "All conversion methods failed"}), 500
             
-        return jsonify({"document_id": pdf_filename})
+        return jsonify({
+            "document_id": pdf_filename,
+            "conversion_id": conversion_id
+        })
 
     # Handle actual PDF uploads
     elif file_ext == '.pdf':
         # Rename to our unique filename
-        final_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}.pdf")
+        final_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}.pdf")
         os.rename(temp_path, final_path)
-        return jsonify({"document_id": f"{unique_id}.pdf"})
+        return jsonify({
+            "document_id": f"{unique_id}.pdf",
+            "conversion_id": conversion_id
+        })
     
     # Unsupported file type
     os.remove(temp_path)
     return jsonify({"error": "Unsupported file type"}), 400
-
     
 @app.route('/sign-document/<document_id>')
 def sign_document(document_id):
-    document_path = os.path.join(UPLOAD_FOLDER, document_id)
+    document_path = os.path.join(app.config['UPLOAD_FOLDER'], document_id)
     if not os.path.exists(document_path):
         return "Document not found", 404
 
+    # Get parameters from query string
+    user_id = request.args.get('user_id')
+    conversion_id = request.args.get('conversion_id')
+    
     # Get original extension
     original_extension = os.path.splitext(document_id)[1].lower()
     
@@ -1784,101 +2051,169 @@ def sign_document(document_id):
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Sign Document</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.13.216/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+  </script>
   <style>
+    body {
+      padding-bottom: 20px;
+      touch-action: manipulation;
+    }
     #pdf-container {
       width: 100%;
-      display: flex;
-      justify-content: center;
+      height: 60vh;
+      overflow: auto;
+      border: 1px solid #ddd;
       margin-bottom: 20px;
+      background-color: #f5f5f5;
+      position: relative;
+      -webkit-overflow-scrolling: touch;
     }
     #pdfViewer {
       width: 100%;
-      max-width: 800px;
-      height: 80vh;
-      overflow-y: scroll;
-      border: 1px solid #ccc;
-      position: relative;
+      padding: 10px 0;
     }
     .page-container {
-      position: relative;
-      margin-bottom: 20px;
-      background-color: white;
+      margin: 0 auto 20px;
       box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      position: relative;
+      background-color: white;
+      max-width: 800px;
     }
     canvas.page {
       display: block;
       margin: 0 auto;
-      max-width: 100%;
+      width: 100% !important;
+      height: auto !important;
     }
     .signature-preview {
       position: absolute;
-      cursor: move;
       z-index: 100;
-      max-width: 200px;
+      max-width: 150px;
       border: 1px dashed #888;
       overflow: hidden;
+      touch-action: none;
     }
     #signatureCanvas {
       border: 1px solid #000;
       width: 100%;
-      height: 200px;
+      height: 150px;
       background-color: white;
       touch-action: none;
     }
     #typedPreview {
       font-family: 'Brush Script MT', cursive;
-      font-size: 2rem;
-      min-height: 50px;
+      font-size: 1.5rem;
+      min-height: 40px;
       border: 1px dashed #ccc;
-      padding: 10px;
-      margin-top: 10px;
+      padding: 8px;
+      margin-top: 8px;
     }
     #uploadPreview {
-      max-height: 150px;
+      max-height: 120px;
       display: none;
-      margin-top: 10px;
+      margin-top: 8px;
     }
     .instructions {
       background-color: #f8f9fa;
-      padding: 15px;
+      padding: 12px;
       border-radius: 5px;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
+      font-size: 0.9rem;
     }
     .resize-handle {
       position: absolute;
-      width: 10px;
-      height: 10px;
+      width: 24px;
+      height: 24px;
       background: #555;
       right: 0;
       bottom: 0;
       cursor: nwse-resize;
+      z-index: 101;
     }
+    .close-signature {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: rgba(255,255,255,0.7);
+      border: 1px solid #aaa;
+      cursor: pointer;
+      padding: 2px 8px;
+      font-size: 18px;
+      font-weight: bold;
+      z-index: 102;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn {
+      padding: 10px 16px;
+      font-size: 1rem;
+    }
+    .nav-tabs .nav-link {
+      padding: 10px 12px;
+    }
+    .tab-content {
+      padding: 15px 0;
+    }
+    .loading-message {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      flex-direction: column;
+    }
+    .spinner {
+      width: 3rem;
+      height: 3rem;
+      margin-bottom: 1rem;
+    }
+    /* Improved touch targets */
+    .btn, .nav-link, .close-signature, .resize-handle {
+      touch-action: manipulation;
+    }
+    #pdf-container {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y; 
+}
   </style>
 </head>
 <body>
-<div class="container mt-4">
-  <h1>Sign Document</h1>
-  <div class="instructions alert alert-info">
-    <strong>Instructions:</strong> Click anywhere on the document to place your signature. 
-    Drag to reposition and resize as needed. When finished, click "Save & Download".
+<div class="container mt-3">
+  <h1 class="h4">Sign Document</h1>
+  <div class="instructions alert alert-info py-2">
+    <strong>Instructions:</strong> Tap anywhere on the document to place your signature. 
+    Drag to reposition and pinch to resize. When finished, tap "Save & Download".
   </div>
+  
+  <!-- PDF Viewer Container -->
   <div id="pdf-container">
-    <div id="pdfViewer"></div>
+    <div id="pdfViewer">
+      <div class="loading-message">
+        <div class="spinner-border text-primary spinner" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Loading document...</p>
+      </div>
+    </div>
   </div>
-  <button id="saveDocument" class="btn btn-success mt-3">Save & Download Signed Document</button>
+  
+  <button id="saveDocument" class="btn btn-success mt-2 w-100">Save & Download Signed Document</button>
 </div>
 
 <!-- Signature Modal -->
-<div class="modal fade" id="signatureModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
+<div class="modal fade" id="signatureModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-fullscreen-sm-down">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Create Signature</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <ul class="nav nav-tabs">
@@ -1890,25 +2225,25 @@ def sign_document(document_id):
         <div class="tab-content mt-3">
           <div class="tab-pane fade show active" id="draw">
             <canvas id="signatureCanvas"></canvas>
-            <button id="clearDraw" class="btn btn-warning mt-2">Clear</button>
+            <button id="clearDraw" class="btn btn-warning mt-2 w-100">Clear</button>
           </div>
 
           <div class="tab-pane fade" id="type">
-            <input type="text" id="typedSignature" class="form-control" placeholder="Type your name">
+            <input type="text" id="typedSignature" class="form-control form-control-lg" placeholder="Type your name">
             <div id="typedPreview">Signature will appear here</div>
-            <button id="clearType" class="btn btn-warning mt-2">Clear</button>
+            <button id="clearType" class="btn btn-warning mt-2 w-100">Clear</button>
           </div>
 
           <div class="tab-pane fade" id="upload">
-            <input type="file" id="uploadSignature" class="form-control" accept="image/*">
+            <input type="file" id="uploadSignature" class="form-control form-control-lg" accept="image/*">
             <img id="uploadPreview" class="img-fluid mt-2">
-            <button id="clearUpload" class="btn btn-warning mt-2">Clear</button>
+            <button id="clearUpload" class="btn btn-warning mt-2 w-100">Clear</button>
           </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button id="addSignature" class="btn btn-primary">Add Signature</button>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button id="addSignature" class="btn btn-primary w-100">Add Signature</button>
+        <button type="button" class="btn btn-secondary w-100 mt-2" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
@@ -1916,8 +2251,8 @@ def sign_document(document_id):
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const BACKEND_URL = "/dashapi";
-const pdfUrl = `${BACKEND_URL}/uploads/{{ document_id }}`;
+// Configuration
+const pdfUrl = "/dashapi/uploads/{{ document_id }}";
 const pdfViewer = document.getElementById("pdfViewer");
 const originalExtension = "{{ original_extension }}";
 let currentPage = 0;
@@ -1927,425 +2262,598 @@ let pdfDoc = null;
 let pageRects = [];
 let clickX = 0;
 let clickY = 0;
+let signatureCanvas, signatureCtx; // Global canvas reference
 
-// Load PDF with page containers
-pdfjsLib.getDocument(pdfUrl).promise.then(pdf => {
-  pdfDoc = pdf;
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const pageContainer = document.createElement("div");
-    pageContainer.className = "page-container";
-    pageContainer.dataset.pageNumber = i;
-    pdfViewer.appendChild(pageContainer);
-    pageContainers.push(pageContainer);
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+  // Initialize signature canvas first
+  signatureCanvas = document.getElementById("signatureCanvas");
+  signatureCanvas.width = 300;
+  signatureCanvas.height = 120;
+  signatureCtx = signatureCanvas.getContext("2d");
+  signatureCtx.fillStyle = "rgba(255,255,255,0)";
+  signatureCtx.fillRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+  signatureCtx.strokeStyle = 'black';
+  signatureCtx.lineWidth = 2;
+  signatureCtx.lineCap = 'round';
+  
+  loadPDF();
+  setupSignatureCanvas();
+  setupEventListeners();
+});
 
-    pdf.getPage(i).then(page => {
+// Load and render PDF document
+async function loadPDF() {
+  try {
+    // Show loading state
+    pdfViewer.innerHTML = `
+      <div class="loading-message">
+        <div class="spinner-border text-primary spinner" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Loading document...</p>
+      </div>
+    `;
+    
+    // Load the PDF document
+    const loadingTask = pdfjsLib.getDocument({
+      url: pdfUrl,
+      cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/cmaps/',
+      cMapPacked: true
+    });
+    
+    pdfDoc = await loadingTask.promise;
+    pdfViewer.innerHTML = '';
+    pageContainers = [];
+    pageRects = [];
+    
+    // Render each page
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      const page = await pdfDoc.getPage(i);
       const viewport = page.getViewport({ scale: 1.0 });
+      
+      // Create page container
+      const pageContainer = document.createElement("div");
+      pageContainer.className = "page-container";
+      pageContainer.dataset.pageNumber = i;
+      pdfViewer.appendChild(pageContainer);
+      pageContainers.push(pageContainer);
+      
+      // Create canvas for rendering
       const canvas = document.createElement("canvas");
       canvas.className = "page";
       const context = canvas.getContext("2d");
       
-      // Adjust canvas size to fit container while maintaining aspect ratio
-      const containerWidth = pdfViewer.clientWidth - 40; // Account for padding
+      // Adjust scale to fit container width
+      const containerWidth = document.getElementById('pdf-container').clientWidth - 40;
       const scale = containerWidth / viewport.width;
       const scaledViewport = page.getViewport({ scale: scale });
       
+      // Set canvas dimensions
       canvas.width = scaledViewport.width;
       canvas.height = scaledViewport.height;
       
-      page.render({
-        canvasContext: context,
-        viewport: scaledViewport
-      });
-      
-      pageContainer.appendChild(canvas);
-      
-      // Store the page dimensions and scale factor
+      // Store page dimensions for signature placement
       pageRects[i-1] = {
         viewport: viewport,
         scaledViewport: scaledViewport,
         scale: scale,
         containerWidth: containerWidth
       };
-
-      // Add click handler for each page
-      pageContainer.addEventListener('click', function(e) {
-        if (e.target.tagName !== 'CANVAS') return;
-        
-        const rect = canvas.getBoundingClientRect();
-        clickX = e.clientX - rect.left;
-        clickY = e.clientY - rect.top;
-        
-        currentPage = i;
-        const modal = new bootstrap.Modal(document.getElementById('signatureModal'));
-        modal.show();
-      });
-    });
+      
+      // Render PDF page
+      await page.render({
+        canvasContext: context,
+        viewport: scaledViewport
+      }).promise;
+      
+      pageContainer.appendChild(canvas);
+      
+      // Add click/touch handler for signature placement
+      setupPageInteraction(pageContainer, canvas, i);
+    }
+  } catch (error) {
+    console.error("Error loading PDF:", error);
+    pdfViewer.innerHTML = `
+      <div class="alert alert-danger">
+        <h5>Failed to load document</h5>
+        <p>Please check:</p>
+        <ul>
+          <li>The file exists at: ${pdfUrl}</li>
+          <li>The file is a valid PDF document</li>
+          <li>Server permissions allow access to the file</li>
+        </ul>
+        <p class="mt-2"><strong>Error details:</strong> ${error.message}</p>
+      </div>
+    `;
   }
-});
+}
 
-// Drawing Canvas Setup
-const canvas = document.getElementById("signatureCanvas");
-canvas.width = 400;
-canvas.height = 150;
-const ctx = canvas.getContext("2d");
-ctx.fillStyle = "rgba(255,255,255,0)";
-ctx.fillRect(0, 0, canvas.width, canvas.height);
-ctx.strokeStyle = 'black';
-ctx.lineWidth = 2;
-ctx.lineCap = 'round';
+// Set up page interaction handlers
+function setupPageInteraction(pageContainer, canvas, pageNumber) {
+  let touchStartTime = 0;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  const TAP_DURATION_THRESHOLD = 200; // ms
+  const TAP_DISTANCE_THRESHOLD = 10; // pixels
 
-let isDrawing = false;
-let lastX = 0, lastY = 0;
+  // Click handler (unchanged)
+  pageContainer.addEventListener('click', function(e) {
+    if (e.target.tagName !== 'CANVAS') return;
+    
+    const rect = canvas.getBoundingClientRect();
+    clickX = e.clientX - rect.left;
+    clickY = e.clientY - rect.top;
+    
+    currentPage = pageNumber;
+    const modal = new bootstrap.Modal(document.getElementById('signatureModal'));
+    modal.show();
+  });
+  
+  // Improved touch handler
+  pageContainer.addEventListener('touchstart', function(e) {
+    if (e.target.tagName !== 'CANVAS') return;
+    
+    const touch = e.touches[0];
+    touchStartTime = Date.now();
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+  }, {passive: true});
 
-canvas.addEventListener('mousedown', e => {
+  pageContainer.addEventListener('touchend', function(e) {
+    if (e.target.tagName !== 'CANVAS') return;
+    
+    const touch = e.changedTouches[0];
+    const rect = canvas.getBoundingClientRect();
+    const touchEndTime = Date.now();
+    const duration = touchEndTime - touchStartTime;
+    
+    // Calculate distance moved
+    const distanceX = Math.abs(touch.clientX - touchStartX);
+    const distanceY = Math.abs(touch.clientY - touchStartY);
+    
+    // Only consider it a tap if:
+    // 1. The touch duration was short (not a long press)
+    // 2. The finger didn't move much (not a scroll)
+    if (duration < TAP_DURATION_THRESHOLD && 
+        distanceX < TAP_DISTANCE_THRESHOLD && 
+        distanceY < TAP_DISTANCE_THRESHOLD) {
+      e.preventDefault();
+      
+      clickX = touch.clientX - rect.left;
+      clickY = touch.clientY - rect.top;
+      
+      currentPage = pageNumber;
+      const modal = new bootstrap.Modal(document.getElementById('signatureModal'));
+      modal.show();
+    }
+  }, {passive: false});
+}
+
+// Set up signature canvas
+function setupSignatureCanvas() {
+  let isDrawing = false;
+  let lastX = 0, lastY = 0;
+
+  // Mouse events
+  signatureCanvas.addEventListener('mousedown', e => {
     isDrawing = true;
     [lastX, lastY] = [e.offsetX, e.offsetY];
-});
-canvas.addEventListener('mousemove', e => {
+  });
+
+  signatureCanvas.addEventListener('mousemove', e => {
     if (!isDrawing) return;
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(e.offsetX, e.offsetY);
-    ctx.stroke();
+    signatureCtx.beginPath();
+    signatureCtx.moveTo(lastX, lastY);
+    signatureCtx.lineTo(e.offsetX, e.offsetY);
+    signatureCtx.stroke();
     [lastX, lastY] = [e.offsetX, e.offsetY];
-});
-canvas.addEventListener('mouseup', () => isDrawing = false);
-canvas.addEventListener('mouseout', () => isDrawing = false);
-canvas.addEventListener('touchstart', e => {
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    const mouseEvent = new MouseEvent('mousedown', {
-        clientX: touch.clientX,
-        clientY: touch.clientY
-    });
-    canvas.dispatchEvent(mouseEvent);
-});
-canvas.addEventListener('touchmove', e => {
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    const mouseEvent = new MouseEvent('mousemove', {
-        clientX: touch.clientX,
-        clientY: touch.clientY
-    });
-    canvas.dispatchEvent(mouseEvent);
-});
-canvas.addEventListener('touchend', () => {
-    const mouseEvent = new MouseEvent('mouseup', {});
-    canvas.dispatchEvent(mouseEvent);
-});
+  });
 
-document.getElementById("clearDraw").addEventListener("click", function () {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "rgba(255,255,255,0)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-});
+  signatureCanvas.addEventListener('mouseup', () => isDrawing = false);
+  signatureCanvas.addEventListener('mouseout', () => isDrawing = false);
 
-// Typed Signature
-document.getElementById("typedSignature").addEventListener("input", function () {
+  // Touch events
+  signatureCanvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = signatureCanvas.getBoundingClientRect();
+    lastX = touch.clientX - rect.left;
+    lastY = touch.clientY - rect.top;
+    isDrawing = true;
+  }, {passive: false});
+
+  signatureCanvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const touch = e.touches[0];
+    const rect = signatureCanvas.getBoundingClientRect();
+    const currentX = touch.clientX - rect.left;
+    const currentY = touch.clientY - rect.top;
+    
+    signatureCtx.beginPath();
+    signatureCtx.moveTo(lastX, lastY);
+    signatureCtx.lineTo(currentX, currentY);
+    signatureCtx.stroke();
+    
+    [lastX, lastY] = [currentX, currentY];
+  }, {passive: false});
+
+  signatureCanvas.addEventListener('touchend', () => {
+    isDrawing = false;
+  });
+
+  // Clear button
+  document.getElementById("clearDraw").addEventListener("click", function () {
+    signatureCtx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+    signatureCtx.fillStyle = "rgba(255,255,255,0)";
+    signatureCtx.fillRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+  });
+}
+
+// Set up other event listeners
+function setupEventListeners() {
+  // Typed Signature
+  document.getElementById("typedSignature").addEventListener("input", function () {
     document.getElementById("typedPreview").textContent = this.value || "Signature will appear here";
-});
-document.getElementById("clearType").addEventListener("click", function () {
+  });
+  document.getElementById("clearType").addEventListener("click", function () {
     document.getElementById("typedSignature").value = "";
     document.getElementById("typedPreview").textContent = "Signature will appear here";
-});
+  });
 
-// Upload Signature
-document.getElementById("uploadSignature").addEventListener("change", function (e) {
+  // Upload Signature
+  document.getElementById("uploadSignature").addEventListener("change", function (e) {
     const file = e.target.files[0];
     if (file) {
-        const reader = new FileReader();
-        reader.onload = function (event) {
-            const preview = document.getElementById("uploadPreview");
-            preview.src = event.target.result;
-            preview.style.display = "block";
-        };
-        reader.readAsDataURL(file);
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        const preview = document.getElementById("uploadPreview");
+        preview.src = event.target.result;
+        preview.style.display = "block";
+      };
+      reader.readAsDataURL(file);
     }
-});
-document.getElementById("clearUpload").addEventListener("click", function () {
+  });
+  document.getElementById("clearUpload").addEventListener("click", function () {
     document.getElementById("uploadSignature").value = "";
     document.getElementById("uploadPreview").src = "";
     document.getElementById("uploadPreview").style.display = "none";
-});
+  });
 
-// Add Signature Button
-document.getElementById("addSignature").addEventListener("click", function () {
+  // Add Signature Button - FIXED: Now properly checks all signature types
+  document.getElementById("addSignature").addEventListener("click", function () {
     const activeTab = document.querySelector('.tab-pane.active').id;
     let signatureData = null;
 
     if (activeTab === 'draw') {
-        const blankCanvas = document.createElement('canvas');
-        blankCanvas.width = canvas.width;
-        blankCanvas.height = canvas.height;
-        const blankCtx = blankCanvas.getContext('2d');
-        blankCtx.clearRect(0, 0, blankCanvas.width, blankCanvas.height);
-        if (canvas.toDataURL() === blankCanvas.toDataURL()) {
-            alert("Please draw your signature first");
-            return;
-        }
-        signatureData = canvas.toDataURL("image/png");
-    } else if (activeTab === 'type') {
-        const text = document.getElementById("typedSignature").value.trim();
-        if (!text) {
-            alert("Please type your signature first");
-            return;
-        }
-        const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = 300;
-        tempCanvas.height = 100;
-        const ctx = tempCanvas.getContext("2d");
-        ctx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-        ctx.font = "36px 'Brush Script MT', cursive";
-        ctx.fillStyle = "black";
-        ctx.fillText(text, 10, 50);
-        signatureData = tempCanvas.toDataURL("image/png");
-    } else if (activeTab === 'upload') {
-        const preview = document.getElementById("uploadPreview");
-        if (!preview.src) {
-            alert("Please upload a signature image first");
-            return;
-        }
-        signatureData = preview.src;
-    }
-
-    // Get the page container for the current page
-    const pageContainer = document.querySelector(`.page-container[data-page-number="${currentPage}"]`);
-    if (!pageContainer) return;
-
-    // Create signature element centered at click position
-    const signatureWidth = 200;
-    const signatureHeight = 100;
-    const wrapper = document.createElement("div");
-    wrapper.className = "signature-preview";
-    wrapper.style.position = "absolute";
-    wrapper.style.left = `${clickX - signatureWidth/2}px`;
-    wrapper.style.top = `${clickY - signatureHeight/2}px`;
-    wrapper.style.width = `${signatureWidth}px`;
-    wrapper.style.height = `${signatureHeight}px`;
-
-    const img = document.createElement("img");
-    img.src = signatureData;
-    img.style.width = "100%";
-    img.style.height = "100%";
-    img.style.objectFit = "contain";
-    img.style.pointerEvents = "none";
-
-    const closeBtn = document.createElement("div");
-    closeBtn.textContent = "×";
-    closeBtn.style.position = "absolute";
-    closeBtn.style.top = "0";
-    closeBtn.style.right = "0";
-    closeBtn.style.background = "rgba(255,255,255,0.7)";
-    closeBtn.style.border = "1px solid #aaa";
-    closeBtn.style.cursor = "pointer";
-    closeBtn.style.padding = "0 6px";
-    closeBtn.style.fontSize = "16px";
-    closeBtn.style.fontWeight = "bold";
-    closeBtn.addEventListener("click", () => {
-        wrapper.remove();
-        signatures = signatures.filter(sig => sig.element !== wrapper);
-    });
-
-    // Add resize handle
-    const resizeHandle = document.createElement("div");
-    resizeHandle.className = "resize-handle";
-    resizeHandle.addEventListener('mousedown', initResize);
-
-    wrapper.appendChild(img);
-    wrapper.appendChild(closeBtn);
-    wrapper.appendChild(resizeHandle);
-    pageContainer.appendChild(wrapper);
-
-    // Store signature data with accurate position info
-    const pageInfo = pageRects[currentPage-1];
-    const signature = {
-        element: wrapper,
-        page: currentPage,
-        data: signatureData,
-        position: { 
-            left: clickX - signatureWidth/2, 
-            top: clickY - signatureHeight/2, 
-            width: signatureWidth, 
-            height: signatureHeight,
-            scale: pageInfo.scale,
-            originalWidth: pageInfo.viewport.width,
-            originalHeight: pageInfo.viewport.height
-        }
-    };
-    signatures.push(signature);
-
-    // Make draggable
-    makeDraggable(wrapper, signature);
-    
-    bootstrap.Modal.getInstance(document.getElementById('signatureModal')).hide();
-});
-
-function makeDraggable(el, signature) {
-    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-
-    el.onmousedown = dragMouseDown;
-    el.ontouchstart = dragMouseDown;
-
-    function dragMouseDown(e) {
-        e.preventDefault();
-        
-        // Don't drag if clicking on close button or resize handle
-        if (e.target === el.querySelector('div') || e.target.className === 'resize-handle') {
-            return;
-        }
-
-        pos3 = e.clientX || e.touches[0].clientX;
-        pos4 = e.clientY || e.touches[0].clientY;
-        
-        document.onmouseup = closeDragElement;
-        document.ontouchend = closeDragElement;
-        document.onmousemove = elementDrag;
-        document.ontouchmove = elementDrag;
-    }
-
-    function elementDrag(e) {
-        e.preventDefault();
-        const clientX = e.clientX || e.touches[0].clientX;
-        const clientY = e.clientY || e.touches[0].clientY;
-        
-        pos1 = pos3 - clientX;
-        pos2 = pos4 - clientY;
-        pos3 = clientX;
-        pos4 = clientY;
-        
-        const pageContainer = el.parentElement;
-        const canvas = pageContainer.querySelector('canvas');
-        const canvasRect = canvas.getBoundingClientRect();
-        
-        let newTop = el.offsetTop - pos2;
-        let newLeft = el.offsetLeft - pos1;
-        
-        // Constrain to page container
-        newTop = Math.max(0, Math.min(newTop, canvasRect.height - el.offsetHeight));
-        newLeft = Math.max(0, Math.min(newLeft, canvasRect.width - el.offsetWidth));
-        
-        el.style.top = newTop + "px";
-        el.style.left = newLeft + "px";
-        
-        // Update signature position with accurate coordinates
-        signature.position = {
-            left: newLeft,
-            top: newTop,
-            width: el.offsetWidth,
-            height: el.offsetHeight,
-            scale: signature.position.scale,
-            originalWidth: signature.position.originalWidth,
-            originalHeight: signature.position.originalHeight
-        };
-    }
-
-    function closeDragElement() {
-        document.onmouseup = null;
-        document.ontouchend = null;
-        document.onmousemove = null;
-        document.ontouchmove = null;
-    }
-}
-
-function initResize(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const el = this.parentElement;
-    const signature = signatures.find(sig => sig.element === el);
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startWidth = parseInt(document.defaultView.getComputedStyle(el).width, 10);
-    const startHeight = parseInt(document.defaultView.getComputedStyle(el).height, 10);
-    
-    function doResize(e) {
-        const width = startWidth + (e.clientX - startX);
-        const height = startHeight + (e.clientY - startY);
-        if (width > 50 && height > 30) {
-            el.style.width = width + 'px';
-            el.style.height = height + 'px';
-            
-            // Update signature position
-            signature.position.width = width;
-            signature.position.height = height;
-        }
-    }
-    
-    function stopResize() {
-        window.removeEventListener('mousemove', doResize, false);
-        window.removeEventListener('mouseup', stopResize, false);
-    }
-    
-    window.addEventListener('mousemove', doResize, false);
-    window.addEventListener('mouseup', stopResize, false);
-}
-
-// Save Signed Document
-const saveButton = document.getElementById("saveDocument");
-saveButton.addEventListener("click", async function () {
-    if (signatures.length === 0) {
-        alert("Please add at least one signature first");
+      // Check if signature is not empty
+      const blankCanvas = document.createElement('canvas');
+      blankCanvas.width = signatureCanvas.width;
+      blankCanvas.height = signatureCanvas.height;
+      const blankCtx = blankCanvas.getContext('2d');
+      blankCtx.fillStyle = "rgba(255,255,255,0)";
+      blankCtx.fillRect(0, 0, blankCanvas.width, blankCanvas.height);
+      
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = signatureCanvas.width;
+      tempCanvas.height = signatureCanvas.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.drawImage(signatureCanvas, 0, 0);
+      
+      if (tempCanvas.toDataURL() === blankCanvas.toDataURL()) {
+        alert("Please draw your signature first");
         return;
+      }
+      signatureData = signatureCanvas.toDataURL("image/png");
+    } else if (activeTab === 'type') {
+      const text = document.getElementById("typedSignature").value.trim();
+      if (!text) {
+        alert("Please type your signature first");
+        return;
+      }
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = 200;
+      tempCanvas.height = 80;
+      const ctx = tempCanvas.getContext("2d");
+      ctx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+      ctx.font = "28px 'Brush Script MT', cursive";
+      ctx.fillStyle = "black";
+      ctx.fillText(text, 10, 40);
+      signatureData = tempCanvas.toDataURL("image/png");
+    } else if (activeTab === 'upload') {
+      const preview = document.getElementById("uploadPreview");
+      if (!preview.src) {
+        alert("Please upload a signature image first");
+        return;
+      }
+      signatureData = preview.src;
     }
 
-    // Prepare signature data for all pages with accurate positioning
+    addSignatureToPage(signatureData);
+    bootstrap.Modal.getInstance(document.getElementById('signatureModal')).hide();
+  });
+
+  // Save Document Button
+  document.getElementById("saveDocument").addEventListener("click", saveSignedDocument);
+}
+
+// Add signature to the page
+function addSignatureToPage(signatureData) {
+  const pageContainer = document.querySelector(`.page-container[data-page-number="${currentPage}"]`);
+  if (!pageContainer) return;
+
+  // Create signature element
+  const signatureWidth = 120;
+  const signatureHeight = 60;
+  const wrapper = document.createElement("div");
+  wrapper.className = "signature-preview";
+  wrapper.style.left = `${clickX - signatureWidth/2}px`;
+  wrapper.style.top = `${clickY - signatureHeight/2}px`;
+  wrapper.style.width = `${signatureWidth}px`;
+  wrapper.style.height = `${signatureHeight}px`;
+
+  const img = document.createElement("img");
+  img.src = signatureData;
+  img.style.width = "100%";
+  img.style.height = "100%";
+  img.style.objectFit = "contain";
+  img.style.pointerEvents = "none";
+
+  const closeBtn = document.createElement("div");
+  closeBtn.className = "close-signature";
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    wrapper.remove();
+    signatures = signatures.filter(sig => sig.element !== wrapper);
+  });
+
+  const resizeHandle = document.createElement("div");
+  resizeHandle.className = "resize-handle";
+  resizeHandle.addEventListener('touchstart', initResize, {passive: false});
+  resizeHandle.addEventListener('mousedown', initResize);
+
+  wrapper.appendChild(img);
+  wrapper.appendChild(closeBtn);
+  wrapper.appendChild(resizeHandle);
+  pageContainer.appendChild(wrapper);
+
+  // Store signature data
+  const pageInfo = pageRects[currentPage-1];
+  const signature = {
+    element: wrapper,
+    page: currentPage,
+    data: signatureData,
+    position: { 
+      left: clickX - signatureWidth/2, 
+      top: clickY - signatureHeight/2, 
+      width: signatureWidth, 
+      height: signatureHeight,
+      scale: pageInfo.scale,
+      originalWidth: pageInfo.viewport.width,
+      originalHeight: pageInfo.viewport.height
+    }
+  };
+  signatures.push(signature);
+
+  // Make draggable with improved touch support
+  makeDraggable(wrapper, signature);
+}
+
+// Make element draggable with proper touch support
+function makeDraggable(el, signature) {
+  let isDragging = false;
+  let startX, startY, initialLeft, initialTop;
+
+  // Mouse events
+  el.addEventListener('mousedown', dragStart);
+  
+  // Touch events
+  el.addEventListener('touchstart', function(e) {
+    // Don't start drag if touching close button or resize handle
+    if (e.target.classList.contains('close-signature') || 
+        e.target.classList.contains('resize-handle')) {
+      return;
+    }
+    dragStart(e.touches[0]);
+    e.preventDefault();
+  }, {passive: false});
+
+  function dragStart(e) {
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    initialLeft = el.offsetLeft;
+    initialTop = el.offsetTop;
+    
+    // Set cursor style
+    el.style.cursor = 'grabbing';
+    
+    // Add event listeners
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('touchmove', drag, {passive: false});
+    document.addEventListener('mouseup', dragEnd);
+    document.addEventListener('touchend', dragEnd);
+  }
+
+  function drag(e) {
+    if (!isDragging) return;
+    
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    
+    if (!clientX || !clientY) return;
+    
+    const dx = clientX - startX;
+    const dy = clientY - startY;
+    
+    const pageContainer = el.parentElement;
+    const canvas = pageContainer.querySelector('canvas');
+    const canvasRect = canvas.getBoundingClientRect();
+    
+    let newLeft = initialLeft + dx;
+    let newTop = initialTop + dy;
+    
+    // Constrain to page container
+    newTop = Math.max(0, Math.min(newTop, canvasRect.height - el.offsetHeight));
+    newLeft = Math.max(0, Math.min(newLeft, canvasRect.width - el.offsetWidth));
+    
+    el.style.left = newLeft + "px";
+    el.style.top = newTop + "px";
+    
+    // Update signature position
+    signature.position = {
+      left: newLeft,
+      top: newTop,
+      width: el.offsetWidth,
+      height: el.offsetHeight,
+      scale: signature.position.scale,
+      originalWidth: signature.position.originalWidth,
+      originalHeight: signature.position.originalHeight
+    };
+  }
+
+  function dragEnd() {
+    isDragging = false;
+    el.style.cursor = '';
+    
+    // Remove event listeners
+    document.removeEventListener('mousemove', drag);
+    document.removeEventListener('touchmove', drag);
+    document.removeEventListener('mouseup', dragEnd);
+    document.removeEventListener('touchend', dragEnd);
+  }
+}
+
+// Initialize resizing with improved touch support
+function initResize(e) {
+  e.stopPropagation();
+  e.preventDefault();
+  
+  const el = this.parentElement;
+  const signature = signatures.find(sig => sig.element === el);
+  const startX = e.clientX || e.touches[0].clientX;
+  const startY = e.clientY || e.touches[0].clientY;
+  const startWidth = el.offsetWidth;
+  const startHeight = el.offsetHeight;
+  
+  function doResize(e) {
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    
+    if (!clientX || !clientY) return;
+    
+    const width = Math.max(50, startWidth + (clientX - startX));
+    const height = Math.max(30, startHeight + (clientY - startY));
+    
+    el.style.width = width + 'px';
+    el.style.height = height + 'px';
+    
+    signature.position.width = width;
+    signature.position.height = height;
+  }
+  
+  function stopResize() {
+    window.removeEventListener('mousemove', doResize);
+    window.removeEventListener('touchmove', doResize);
+    window.removeEventListener('mouseup', stopResize);
+    window.removeEventListener('touchend', stopResize);
+  }
+  
+  window.addEventListener('mousemove', doResize);
+  window.addEventListener('touchmove', doResize, {passive: false});
+  window.addEventListener('mouseup', stopResize);
+  window.addEventListener('touchend', stopResize);
+}
+
+// Save signed document
+async function saveSignedDocument() {
+  if (signatures.length === 0) {
+    alert("Please add at least one signature first");
+    return;
+  }
+
+  // Show loading state
+  const saveButton = document.getElementById("saveDocument");
+  const originalText = saveButton.textContent;
+  saveButton.disabled = true;
+  saveButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+
+  try {
+    // Prepare signature data
     const signatureData = signatures.map(sig => {
-        const pageContainer = sig.element.parentElement;
-        const canvas = pageContainer.querySelector('canvas');
-        const canvasRect = canvas.getBoundingClientRect();
-        
-        // Calculate the position in the original document coordinates
-        const scale = sig.position.scale;
-        const originalLeft = sig.position.left / scale;
-        const originalTop = sig.position.top / scale;
-        const originalWidth = sig.position.width / scale;
-        const originalHeight = sig.position.height / scale;
-        
-        return {
-            page: sig.page,
-            signature: sig.data,
-            position: {
-                x: originalLeft,
-                y: sig.position.originalHeight - originalTop - originalHeight, // PDF coordinates have Y inverted
-                width: originalWidth,
-                height: originalHeight,
-                originalWidth: sig.position.originalWidth,
-                originalHeight: sig.position.originalHeight
-            }
-        };
+      const pageContainer = sig.element.parentElement;
+      const canvas = pageContainer.querySelector('canvas');
+
+      // ****** ONLY CHANGE: convert from displayed CSS pixels to original PDF pixels ******
+      const pageInfo = pageRects[sig.page - 1];
+      const canvasRect = canvas.getBoundingClientRect();
+
+      // ratios from what's displayed on screen to the PDF's original size
+      const ratioX = pageInfo.viewport.width / canvasRect.width;
+      const ratioY = pageInfo.viewport.height / canvasRect.height;
+
+      const originalLeft = sig.position.left * ratioX;
+      const originalTop = sig.position.top * ratioY;
+      const originalWidth = sig.position.width * ratioX;
+      const originalHeight = sig.position.height * ratioY;
+      // ****************************************************************************************
+
+      return {
+        page: sig.page,
+        signature: sig.data,
+        position: {
+          x: originalLeft,
+          y: pageInfo.viewport.height - originalTop - originalHeight, // invert Y for PDF space
+          width: originalWidth,
+          height: originalHeight,
+          originalWidth: pageInfo.viewport.width,
+          originalHeight: pageInfo.viewport.height
+        }
+      };
     });
 
-    try {
-        const response = await fetch(`${BACKEND_URL}/save-signed-document`, {
-            method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                document_id: "{{ document_id }}",
-                original_extension: originalExtension,
-                signatures: signatureData
-            })
-        });
+    const response = await fetch("/dashapi/save-signed-document", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        document_id: "{{ document_id }}",
+        original_extension: originalExtension,
+        signatures: signatureData,
+        user_id: "{{ user_id }}",
+        conversion_id: "{{ conversion_id }}"
+      })
+    });
 
-        if (!response.ok) throw new Error("Failed to save signed document");
-
-        const blob = await response.blob();
-        const a = document.createElement('a');
-        a.href = window.URL.createObjectURL(blob);
-        a.download = `signed_{{ document_id }}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-    } catch (error) {
-        alert("Error: " + error.message);
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}: ${response.statusText}`);
     }
-});
-</script>
 
-    </body>
-    </html>
-    """, document_id=document_id, original_extension=original_extension)
+    const blob = await response.blob();
+    const a = document.createElement('a');
+    a.href = window.URL.createObjectURL(blob);
+    a.download = `signed_{{ document_id }}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (error) {
+    console.error("Error saving document:", error);
+    alert("Error saving document: " + error.message);
+  } finally {
+    saveButton.disabled = false;
+    saveButton.textContent = originalText;
+  }
+}
+</script>
+</body>
+</html>
+    """,    document_id=display_document_id, 
+    original_extension=original_extension,
+    user_id=user_id,
+    conversion_id=conversion_id)
 
 
 @app.route('/save-signed-document', methods=['POST'])
@@ -2354,11 +2862,13 @@ def save_signed_document():
     document_id = data.get('document_id')
     original_extension = data.get('original_extension')
     signatures_data = data.get('signatures', [])
+    user_id = data.get('user_id')
+    conversion_id = data.get('conversion_id')  # This is the parent conversion_id
 
     if not document_id or not signatures_data:
         return jsonify({"error": "Invalid data"}), 400
 
-    document_path = os.path.join(UPLOAD_FOLDER, document_id)
+    document_path = os.path.join(app.config['UPLOAD_FOLDER'], document_id)
     if not os.path.exists(document_path):
         return jsonify({"error": "Document not found"}), 404
 
@@ -2381,111 +2891,123 @@ def save_signed_document():
                     'position': sig['position']
                 })
 
-        if original_extension == '.pdf':
-            # Handle PDF documents (existing code)
-            original_pdf = PdfReader(document_path)
-            output = PdfWriter()
+        # Generate a new conversion_id for the signed version
+        signed_conversion_id = str(uuid.uuid4())
+        signed_filename = f"signed_{document_id}"
+        signed_document_path = os.path.join(app.config['OUTPUT_FOLDER'], signed_filename)
 
-            for page_num in range(len(original_pdf.pages)):
-                page = original_pdf.pages[page_num]
-                page_width = float(page.mediabox.width)
-                page_height = float(page.mediabox.height)
+        # Handle PDF documents
+        original_pdf = PdfReader(document_path)
+        output = PdfWriter()
 
-                page_signatures = [sig for sig in signature_images if sig['page'] == page_num]
-                
-                if page_signatures:
-                    packet = BytesIO()
-                    can = canvas.Canvas(packet, pagesize=(page_width, page_height))
-                    
-                    for sig in page_signatures:
-                        pos = sig['position']
-                        x = pos['x']
-                        y = pos['y']
-                        width = pos['width']
-                        height = pos['height']
-                        can.drawImage(sig['path'], x, y, width, height, mask='auto')
-                    
-                    can.save()
-                    packet.seek(0)
-                    overlay_pdf = PdfReader(packet)
-                    page.merge_page(overlay_pdf.pages[0])
-                
-                output.add_page(page)
+        for page_num in range(len(original_pdf.pages)):
+            page = original_pdf.pages[page_num]
+            page_width = float(page.mediabox.width)
+            page_height = float(page.mediabox.height)
 
-            signed_filename = f"signed_{document_id}"
-            signed_document_path = os.path.join(OUTPUT_FOLDER, signed_filename)
-
-            with open(signed_document_path, "wb") as output_pdf:
-                output.write(output_pdf)
-
-        elif original_extension in ('.doc', '.docx'):
-            # Handle Word documents properly
-            doc = Document(document_path)
+            page_signatures = [sig for sig in signature_images if sig['page'] == page_num]
             
-            # Create a temporary PDF to work with
-            temp_pdf_path = os.path.join(tempfile.gettempdir(), f"temp_{document_id}.pdf")
-            pypandoc.convert_file(document_path, 'pdf', outputfile=temp_pdf_path)
-            
-            # Add signatures to the PDF version
-            original_pdf = PdfReader(temp_pdf_path)
-            output = PdfWriter()
-
-            for page_num in range(len(original_pdf.pages)):
-                page = original_pdf.pages[page_num]
-                page_width = float(page.mediabox.width)
-                page_height = float(page.mediabox.height)
-
-                page_signatures = [sig for sig in signature_images if sig['page'] == page_num]
+            if page_signatures:
+                packet = BytesIO()
+                can = canvas.Canvas(packet, pagesize=(page_width, page_height))
                 
-                if page_signatures:
-                    packet = BytesIO()
-                    can = canvas.Canvas(packet, pagesize=(page_width, page_height))
-                    
-                    for sig in page_signatures:
-                        pos = sig['position']
-                        x = pos['x']
-                        y = pos['y']
-                        width = pos['width']
-                        height = pos['height']
-                        can.drawImage(sig['path'], x, y, width, height, mask='auto')
-                    
-                    can.save()
-                    packet.seek(0)
-                    overlay_pdf = PdfReader(packet)
-                    page.merge_page(overlay_pdf.pages[0])
+                for sig in page_signatures:
+                    pos = sig['position']
+                    x = pos['x']
+                    y = pos['y']
+                    width = pos['width']
+                    height = pos['height']
+                    can.drawImage(sig['path'], x, y, width, height, mask='auto')
                 
-                output.add_page(page)
-
-            # Save the signed PDF
-            signed_pdf_filename = f"signed_{os.path.splitext(document_id)[0]}.pdf"
-            signed_pdf_path = os.path.join(OUTPUT_FOLDER, signed_pdf_filename)
-
-            with open(signed_pdf_path, "wb") as output_pdf:
-                output.write(output_pdf)
+                can.save()
+                packet.seek(0)
+                overlay_pdf = PdfReader(packet)
+                page.merge_page(overlay_pdf.pages[0])
             
-            # For Word docs, we can either:
-            # 1. Return the signed PDF (simpler)
-            # 2. Or convert back to Word format (more complex)
-            
-            # Here we'll return the PDF for simplicity
-            signed_document_path = signed_pdf_path
-            signed_filename = signed_pdf_filename
+            output.add_page(page)
+
+        with open(signed_document_path, "wb") as output_pdf:
+            output.write(output_pdf)
+
+        # Update database with completion - create a new record for the signed version
+        if user_id and conversion_id:
+            try:
+                db = get_db()
+                cursor = db.cursor()
+                
+                # First get the original conversion details
+                cursor.execute("""
+                    SELECT original_filename, file_size FROM conversions 
+                    WHERE conversion_id=?
+                """, (conversion_id,))
+                original_data = cursor.fetchone()
+                
+                if original_data:
+                    # Create new record for the signed document
+                    cursor.execute("""
+                        INSERT INTO conversions 
+                        (user_id, conversion_type, original_filename, converted_filename, 
+                         file_size, status, conversion_id, parent_conversion_id, completed_at) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """, (
+                        user_id,
+                        'document_signing_completed',
+                        original_data['original_filename'],
+                        signed_filename,
+                        os.path.getsize(signed_document_path),
+                        'completed',
+                        signed_conversion_id,
+                        conversion_id  # Link to parent conversion
+                    ))
+                    
+                    # Update the original record to mark it as processed
+                    cursor.execute("""
+                        UPDATE conversions SET 
+                        status=?,
+                        completed_at=CURRENT_TIMESTAMP
+                        WHERE conversion_id=?
+                    """, (
+                        'processed',
+                        conversion_id
+                    ))
+                    
+                    db.commit()
+            except Exception as e:
+                app.logger.error(f"Failed to update conversion records: {str(e)}")
 
         # Clean up temporary files
         for sig in signature_images:
             os.unlink(sig['path'])
-        
-        if original_extension in ('.doc', '.docx') and os.path.exists(temp_pdf_path):
-            os.unlink(temp_pdf_path)
 
-        return send_from_directory(OUTPUT_FOLDER, os.path.basename(signed_document_path), as_attachment=True)
+        return send_from_directory(app.config['OUTPUT_FOLDER'], os.path.basename(signed_document_path), as_attachment=True)
 
     except Exception as e:
+        # Update database with failure if we have a conversion_id
+        if user_id and conversion_id:
+            try:
+                db = get_db()
+                cursor = db.cursor()
+                cursor.execute("""
+                    UPDATE conversions SET 
+                    status=?, 
+                    error_message=?,
+                    completed_at=CURRENT_TIMESTAMP
+                    WHERE conversion_id=?
+                """, (
+                    'failed',
+                    str(e),
+                    conversion_id
+                ))
+                db.commit()
+            except Exception as db_error:
+                app.logger.error(f"Failed to update conversion record: {str(db_error)}")
+        
         return jsonify({"error": str(e)}), 500
 
 @app.route('/download-signed/<filename>')
 def download_signed(filename):
-    return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
+    return send_from_directory(app.config['OUTPUT_FOLDER'], filename, as_attachment=True)
+
 
 
 # Edit PDF document 

@@ -176,7 +176,7 @@ const fileUrl = `/dashapi/uploads/${encodedFilename}`;
             linkContainer.className = "download-link";
             
             const link = document.createElement("a");
-            link.href = file;
+            link.href = `/dashapi${file}`;
             link.textContent = `Download ${fileName}`;
             link.className = "btn btn-success";
             link.download = fileName;
