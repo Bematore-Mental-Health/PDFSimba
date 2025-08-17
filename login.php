@@ -104,99 +104,6 @@ function detectSuspiciousLogin($userId) {
     return ($failedCount >= 3);
 }
 
-// For modal requests
-if (isset($_GET['modal'])) {
-    // Handle AJAX login for modal
-    if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['email'])) {
-        $email = trim($_POST['email']);
-        $password = $_POST['password'];
-        
-        if (empty($email) || empty($password)) {
-            echo '<div class="alert alert-danger mb-3">Please fill in both fields</div>';
-            exit();
-        }
-        
-        $stmt = $conn->prepare("SELECT id, first_name, last_name, email, password, temp_password FROM users WHERE email = ?");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows !== 1) {
-            // Log failed attempt
-            $failStmt = $conn->prepare("INSERT INTO failed_logins (email, ip_address) VALUES (?, ?)");
-            $failStmt->bind_param("ss", $email, $_SERVER['REMOTE_ADDR']);
-            $failStmt->execute();
-            $failStmt->close();
-            
-            echo '<div class="alert alert-danger mb-3">Invalid email or password</div>';
-            exit();
-        }
-        
-        $user = $result->fetch_assoc();
-        
-        if (!password_verify($password, $user['password'])) {
-            // Log failed attempt
-            $failStmt = $conn->prepare("INSERT INTO failed_logins (email, ip_address) VALUES (?, ?)");
-            $failStmt->bind_param("ss", $email, $_SERVER['REMOTE_ADDR']);
-            $failStmt->execute();
-            $failStmt->close();
-            
-            echo '<div class="alert alert-danger mb-3">Invalid email or password</div>';
-            exit();
-        }
-        
-        // Check for suspicious login
-        if (detectSuspiciousLogin($user['id'])) {
-            // Generate verification code
-            $verificationCode = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
-            $expiryTime = date('Y-m-d H:i:s', strtotime('+1 hour'));
-            
-            // Store verification code
-            $verifyStmt = $conn->prepare("UPDATE users SET verification_code = ?, verification_code_expiry = ? WHERE id = ?");
-            $verifyStmt->bind_param("ssi", $verificationCode, $expiryTime, $user['id']);
-            $verifyStmt->execute();
-            $verifyStmt->close();
-            
-            // Send verification email
-            $subject = "PDFSimba - Login Verification Code";
-            $body = "Hello {$user['first_name']},\n\n";
-            $body .= "We detected multiple failed login attempts for your account.\n\n";
-            $body .= "Your verification code is: $verificationCode\n\n";
-            $body .= "This code will expire in 1 hour.\n\n";
-            $body .= "If you didn't attempt to login, please contact support immediately.\n\n";
-            $body .= "Thank you,\nThe PDFSimba Team";
-            
-            if (sendEmail($email, $subject, $body)) {
-                $_SESSION['verify_email'] = $email;
-                echo '<div class="alert alert-info mb-3">Verification code sent to your email</div>';
-                exit();
-            } else {
-                echo '<div class="alert alert-danger mb-3">Failed to send verification email. Please try again.</div>';
-                exit();
-            }
-        }
-        
-        // Check if this is a temporary password
-        if ($user['temp_password'] == 1) {
-            $_SESSION['temp_password_warning'] = true;
-        }
-        
-        // Login successful
-        setUserSession($user['id'], $user['first_name'], $user['last_name'], $user['email']);
-        
-        // Log this login
-        $ip = $_SERVER['REMOTE_ADDR'];
-        $logStmt = $conn->prepare("INSERT INTO login_logs (user_id, ip_address) VALUES (?, ?)");
-        $logStmt->bind_param("is", $user['id'], $ip);
-        $logStmt->execute();
-        $logStmt->close();
-        
-        // Return success message
-        echo '<script>window.parent.postMessage("login_success", window.location.origin);</script>';
-        exit();
-    }
-}
-
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Handle password reset request
     if (isset($_POST['request_reset'])) {
@@ -288,7 +195,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $updateStmt->close();
             
             // Set user session
-            setUserSession($user['id'], $user['first_name'], $user['last_name'], $user['email']);
+                setUserSession($user['id'], $user['first_name'], $user['last_name'], $user['email']);
+
             
             // Log this login
             $ip = $_SERVER['REMOTE_ADDR'];
@@ -300,28 +208,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Clear verification session
             unset($_SESSION['verify_email']);
             
-            if (isset($_GET['modal'])) {
-                // For modal logins
-                echo '<script>window.parent.postMessage("login_success", window.location.origin);</script>';
-                exit();
-            } else {
-                // Redirect to dashboard
-                header("Location: ./Dashboard/index.php");
-                exit();
-            }
+            // Redirect to dashboard
+            header("Location: ./Dashboard/index.php");
+            exit();
         } else {
-            // Check if code exists but expired
-            $expiredStmt = $conn->prepare("SELECT id FROM users WHERE email = ? AND verification_code = ? AND verification_code_expiry <= NOW()");
-            $expiredStmt->bind_param("ss", $email, $enteredCode);
-            $expiredStmt->execute();
-            $expiredStmt->store_result();
-            
-            if ($expiredStmt->num_rows > 0) {
-                $verificationError = "Verification code has expired. Please request a new one.";
-            } else {
-                $verificationError = "Invalid verification code. Please try again.";
-            }
-            $expiredStmt->close();
+            $verificationError = "Invalid or expired verification code. Please try again.";
             $showVerificationModal = true;
         }
         $stmt->close();
@@ -377,7 +268,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         }
                     } else {
                         // Normal login - no verification needed
-                        setUserSession($user['id'], $user['first_name'], $user['last_name'], $user['email']);
+                            setUserSession($user['id'], $user['first_name'], $user['last_name'], $user['email']);
+
                         
                         // Log this login
                         $ip = $_SERVER['REMOTE_ADDR'];
@@ -386,15 +278,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         $logStmt->execute();
                         $logStmt->close();
                         
-                        if (isset($_GET['modal'])) {
-                            // For modal logins
-                            echo '<script>window.parent.postMessage("login_success", window.location.origin);</script>';
-                            exit();
-                        } else {
-                            // Redirect to dashboard
-                            header("Location: ./Dashboard/index.php");
-                            exit();
-                        }
+                        // Redirect to dashboard
+                        header("Location: ./Dashboard/index.php");
+                        exit();
                     }
                 } else {
                     $errorMsg = "Incorrect password.";
@@ -579,17 +465,5 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         modal.show();
     }
 </script>
-
-<?php if (isset($_GET['modal'])): ?>
-<script>
-// When login is successful in modal context
-window.parent.postMessage('login_success', window.location.origin);
-
-// Handle successful login
-<?php if (isset($_SESSION['user_id']) && isset($_GET['modal'])): ?>
-window.parent.postMessage('login_success', window.location.origin);
-<?php endif; ?>
-</script>
-<?php endif; ?>
 </body>
 </html>

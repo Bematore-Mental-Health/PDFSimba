@@ -1,0 +1,51 @@
+/* For the login/signup modal */
+#loginRequiredModal .modal-body {
+  padding: 0;
+}
+
+#loginRequiredModal .nav-tabs {
+  margin: 0;
+}
+
+#loginRequiredModal iframe {
+  min-height: 450px;
+}
+
+/* Adjust tab content height */
+.tab-content {
+  overflow: hidden;
+}
+
+.tab-pane {
+  height: 150%;
+}
+
+/* Ensure iframes display properly */
+#loginRequiredModal .tab-content {
+    position: relative;
+    min-height: 300px;
+}
+
+#loginRequiredModal iframe {
+    width: 100%;
+    border: none;
+    display: block;
+}
+
+/* Error message styling */
+.iframe-error-container {
+    padding: 20px;
+    text-align: center;
+}
+
+.iframe-error-container .alert {
+    margin-bottom: 20px;
+}
+/* Add this to your CSS file or style tag */
+#loginRequiredModal {
+  z-index: 10060 !important; /* Bootstrap modals use 1050 by default */
+}
+
+.modal-backdrop {
+  z-index: 1040 !important; /* Backdrop should be below the modal */
+}

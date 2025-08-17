@@ -22,30 +22,7 @@ include './DashboardBackend/db_connection.php';
     <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-<style> 
-/* For the login/signup modal */
-#loginRequiredModal .modal-body {
-  padding: 0;
-}
-
-#loginRequiredModal .nav-tabs {
-  margin: 0;
-}
-
-#loginRequiredModal iframe {
-  min-height: 450px;
-}
-
-/* Adjust tab content height */
-.tab-content {
-  overflow: hidden;
-}
-
-.tab-pane {
-  height: 150%;
-}
-</style>
+    <link rel="stylesheet" href="./CSS/modal.css" />
 </head>
 <body>
 
@@ -696,6 +673,7 @@ include './DashboardBackend/db_connection.php';
         <div class="modal-body">
           <input type="file" name="excel_file" accept=".xls,.xlsx" class="form-control mb-3" required>
           <button type="submit" class="btn btn-success w-100">Convert</button>
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
 
           <div id="excelLoadingIndicator" class="text-center my-3" style="display: none;">
             <div class="spinner-border text-primary" role="status">
@@ -726,6 +704,7 @@ include './DashboardBackend/db_connection.php';
         <div class="modal-body">
           <input type="file" name="ppt_file" accept=".ppt,.pptx" class="form-control mb-3" required>
           <button type="submit" class="btn btn-danger w-100">Convert</button>
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
 
           <div id="pptLoadingIndicator" class="text-center my-3" style="display: none;">
             <div class="spinner-border text-danger" role="status">
@@ -762,6 +741,7 @@ include './DashboardBackend/db_connection.php';
           <div class="d-grid mb-3">
             <button type="submit" class="btn" style="background-color: #6f42c1; color: white;">Convert</button>
           </div>
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
 
           <!-- Purple Loading Indicator -->
           <div id="jpgLoadingIndicator" class="text-center my-3" style="display: none;">
@@ -797,6 +777,8 @@ include './DashboardBackend/db_connection.php';
           <div class="mb-3">
             <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
           </div>
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
           <div id="pdfToWordLoading" style="display: none;">
             <div class="spinner-border text-info" role="status"></div>
             <p class="mt-2">Converting... Please wait</p>
@@ -832,6 +814,8 @@ include './DashboardBackend/db_connection.php';
           <div class="mb-3">
             <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
           </div>
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
           <div id="pdfToExcelLoading" style="display: none;">
             <div class="spinner-border text-info" role="status"></div>
             Converting... Please wait
@@ -868,6 +852,8 @@ include './DashboardBackend/db_connection.php';
           <div class="mb-3">
             <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
           </div>
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
           <div id="pdfToPptLoading" style="display: none;">
             <div class="spinner-border text-info" role="status"></div>
             Converting... Please wait
@@ -900,6 +886,8 @@ include './DashboardBackend/db_connection.php';
           <div class="mb-3">
             <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
           </div>
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
           <div id="pdfToJpgLoading" style="display: none;">
             <div class="spinner-border text-info" role="status"></div>
             Converting... Please wait
@@ -935,6 +923,8 @@ include './DashboardBackend/db_connection.php';
           <div class="mb-3">
             <input type="file" class="form-control" name="pdf_file" accept=".pdf" required />
           </div>
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
           <div id="pdfToPngLoading" style="display: none;">
             <div class="spinner-border text-info" role="status"></div>
             Converting... Please wait
@@ -965,6 +955,8 @@ include './DashboardBackend/db_connection.php';
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
         <form id="pdfToPdfaForm" enctype="multipart/form-data">
           <div class="mb-3">
             <label for="pdfFileToPdfa" class="form-label">Upload PDF:</label>
@@ -1007,6 +999,8 @@ include './DashboardBackend/db_connection.php';
       <div class="modal-body">
         <form id="mergePDFForm" enctype="multipart/form-data">
           <div class="mb-3">
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
             <label for="pdfFiles" class="form-label">Select PDFs to Merge:</label>
             <input type="file" id="pdfFiles" name="pdf_files" multiple class="form-control" accept="application/pdf" required>
           </div>
@@ -1042,6 +1036,8 @@ include './DashboardBackend/db_connection.php';
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
         <form id="splitPDFForm" enctype="multipart/form-data">
           <div class="mb-3">
             <label for="pdfFile" class="form-label">Upload PDF:</label>
@@ -1063,6 +1059,8 @@ include './DashboardBackend/db_connection.php';
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
         <form id="protectPDFForm" enctype="multipart/form-data">
           <div class="mb-3">
             <label for="pdfFileProtect" class="form-label">Upload PDF:</label>
@@ -1094,6 +1092,8 @@ include './DashboardBackend/db_connection.php';
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
         <form id="unlockPDFForm" enctype="multipart/form-data">
           <div class="mb-3">
             <label for="pdfFileUnlock" class="form-label">Upload Protected PDF:</label>
@@ -1124,6 +1124,8 @@ include './DashboardBackend/db_connection.php';
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
         <div class="upload-area p-4 border rounded mb-3 text-center">
           <input type="file" id="ebookFileInput" accept=".epub,.mobi,.azw,.fb2" class="d-none">
           <label for="ebookFileInput" class="btn btn-primary mb-3">
@@ -1170,6 +1172,8 @@ include './DashboardBackend/db_connection.php';
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
           <div class="mb-3">
             <input type="file" class="form-control" name="document_file" accept=".pdf, .doc, .docx" required />
           </div>
@@ -1182,15 +1186,14 @@ include './DashboardBackend/db_connection.php';
   </div>
 </div>
 <!-- Login Required Modal -->
-<div class="modal fade" id="loginRequiredModal" tabindex="-1" aria-labelledby="loginRequiredLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
+<div class="modal fade" id="loginRequiredModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="loginRequiredLabel">Login or Sign Up to Download</h5>
+        <h5 class="modal-title">Login Required</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body p-0">
-        <!-- Tab Navigation -->
         <ul class="nav nav-tabs" id="authTabs" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login-tab-pane" type="button" role="tab">Login</button>
@@ -1199,20 +1202,20 @@ include './DashboardBackend/db_connection.php';
             <button class="nav-link" id="signup-tab" data-bs-toggle="tab" data-bs-target="#signup-tab-pane" type="button" role="tab">Sign Up</button>
           </li>
         </ul>
-        
-        <!-- Tab Content -->
-        <div class="tab-content" id="authTabsContent">
-          <div class="tab-pane fade show active" id="login-tab-pane" role="tabpanel" aria-labelledby="login-tab">
-            <iframe id="loginFrame" src="login.php?modal=1" style="width:100%; height:400px; border:none;"></iframe>
+        <div class="tab-content p-3" id="authTabsContent">
+          <div class="tab-pane fade show active" id="login-tab-pane" role="tabpanel">
+            <iframe id="loginFrame" src="modal-login.php?modal=1" style="width:100%; height:300px; border:none;"></iframe>
           </div>
-          <div class="tab-pane fade" id="signup-tab-pane" role="tabpanel" aria-labelledby="signup-tab">
-            <iframe id="signupFrame" src="signup.php?modal=1" style="width:100%; height:500px; border:none;"></iframe>
+          <div class="tab-pane fade" id="signup-tab-pane" role="tabpanel">
+            <iframe id="signupFrame" src="modal-signup.php?modal=1" style="width:100%; height:400px; border:none;"></iframe>
           </div>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+
 <!-- Edit PDF Modal -->
 <div class="modal fade" id="editPdfModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
@@ -1222,6 +1225,8 @@ include './DashboardBackend/db_connection.php';
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
         <form id="uploadForm" enctype="multipart/form-data">
           <input type="file" name="pdfFile" id="pdfFileInput" class="form-control mb-3" accept="application/pdf" required>
           <button type="submit" class="btn btn-primary">Upload & Edit PDF</button>
@@ -1240,6 +1245,8 @@ include './DashboardBackend/db_connection.php';
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
+             <input type="hidden" id="currentUserId" name="user_id" value="<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>">
+
         <div class="upload-area p-4 border rounded mb-3 text-center">
           <input type="file" id="iworkFileInput" accept=".pages,.key,.numbers" class="d-none">
           <label for="iworkFileInput" class="btn btn-primary mb-3">
@@ -1281,6 +1288,8 @@ include './DashboardBackend/db_connection.php';
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="./JS/pdf-tools.js"></script>
+<!-- <script src="./JS/tools.js"></script> -->
+
 
 
 </body>

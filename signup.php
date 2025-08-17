@@ -117,15 +117,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 unset($_SESSION['temp_email']);
                 unset($_SESSION['verification_code']);
                 
-if (isset($_GET['modal'])) {
-    // For modal context, redirect to login within modal
-    echo '<script>document.querySelector("#signupFrame").src = "login.php?modal=1";</script>';
-    exit();
-} else {
-    // Normal redirect for non-modal
-    header("Location: login.php?signup=success");
-    exit();
-}
+                // Redirect to login
+                header("Location: login.php?signup=success");
+                exit();
             } else {
                 $verificationError = "Database update failed. Please try again.";
             }
@@ -297,20 +291,5 @@ $conn->close();
       });
     <?php endif; ?>
   </script>
-
-  <?php if (isset($_GET['modal'])): ?>
-<script>
-// After successful verification, redirect to login in modal context
-<?php if (isset($_GET['signup']) && $_GET['signup'] === 'success'): ?>
-// Redirect to login page within the modal
-document.querySelector('#signupFrame').src = 'login.php?modal=1';
-<?php endif; ?>
-
-// If directly accessing signup in modal and already verified
-<?php if (isset($_SESSION['user_id']) && isset($_GET['modal'])): ?>
-window.parent.postMessage('login_success', window.location.origin);
-<?php endif; ?>
-</script>
-<?php endif; ?>
 </body>
 </html>
