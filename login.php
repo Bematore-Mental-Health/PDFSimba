@@ -195,7 +195,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $updateStmt->close();
             
             // Set user session
-            setUserSession($user['id'], $user['first_name'], $user['last_name'], $user['email']);
+                setUserSession($user['id'], $user['first_name'], $user['last_name'], $user['email']);
+
             
             // Log this login
             $ip = $_SERVER['REMOTE_ADDR'];
@@ -267,7 +268,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         }
                     } else {
                         // Normal login - no verification needed
-                        setUserSession($user['id'], $user['first_name'], $user['last_name'], $user['email']);
+                            setUserSession($user['id'], $user['first_name'], $user['last_name'], $user['email']);
+
                         
                         // Log this login
                         $ip = $_SERVER['REMOTE_ADDR'];
