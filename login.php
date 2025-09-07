@@ -9,9 +9,9 @@ $verificationError = "";
 // SMTP Configuration
 $smtpHost = 'smtp.gmail.com';
 $smtpPort = 587;
-$smtpUsername = 'systempdfsimba@gmail.com';
-$smtpPassword = 'srwvpiti ksogqlnv';
-$fromEmail = 'systempdfsimba@gmail.com';
+$smtpUsername = 'pdfsimbasystem@gmail.com';
+$smtpPassword = 'bklx zwxt acxm bsnk';
+$fromEmail = 'pdfsimbasystem@gmail.com';
 $fromName = 'PDFSimba';
 
 function sendEmail($toEmail, $subject, $body) {
