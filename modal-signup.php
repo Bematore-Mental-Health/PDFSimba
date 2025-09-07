@@ -9,10 +9,103 @@ $verificationError = "";
 // SMTP Configuration
 $smtpHost = 'smtp.gmail.com';
 $smtpPort = 587;
-$smtpUsername = 'systempdfsimba@gmail.com';
-$smtpPassword = 'srwvpiti ksogqlnv'; // Your app password (remove space if needed)
-$fromEmail = 'systempdfsimba@gmail.com';
+$smtpUsername = 'pdfsimbasystem@gmail.com';
+$smtpPassword = 'bklx zwxt acxm bsnk';
+$fromEmail = 'pdfsimbasystem@gmail.com';
 $fromName = 'PDFSimba';
+
+// Create registration attempts table if it doesn't exist
+$createTableSQL = "
+CREATE TABLE IF NOT EXISTS registration_attempts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ip_address VARCHAR(45) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('success', 'failed', 'blocked') NOT NULL,
+    reason VARCHAR(255),
+    is_spam BOOLEAN DEFAULT FALSE
+)";
+$conn->query($createTableSQL);
+
+// Create index for better performance
+$conn->query("CREATE INDEX IF NOT EXISTS idx_ip ON registration_attempts(ip_address)");
+$conn->query("CREATE INDEX IF NOT EXISTS idx_time ON registration_attempts(attempt_time)");
+
+// Function to log registration attempts
+function logRegistrationAttempt($ip, $email, $firstName, $lastName, $status, $reason = '', $isSpam = false) {
+    global $conn;
+    
+    $stmt = $conn->prepare("INSERT INTO registration_attempts (ip_address, email, first_name, last_name, status, reason, is_spam) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssi", $ip, $email, $firstName, $lastName, $status, $reason, $isSpam);
+    $stmt->execute();
+    $stmt->close();
+}
+
+// Rate limiting - track attempts by IP
+function checkRateLimit() {
+    global $conn;
+    
+    $maxAttempts = 5; // Maximum attempts per hour
+    $ip = $_SERVER['REMOTE_ADDR'];
+    
+    // Check recent attempts from this IP
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM registration_attempts WHERE ip_address = ? AND attempt_time > DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+    $stmt->bind_param("s", $ip);
+    $stmt->execute();
+    $stmt->bind_result($count);
+    $stmt->fetch();
+    $stmt->close();
+    
+    return $count < $maxAttempts;
+}
+
+// Check if IP is blocked (too many failed attempts)
+function isIpBlocked() {
+    global $conn;
+    
+    $ip = $_SERVER['REMOTE_ADDR'];
+    $maxFailedAttempts = 10; // Block after 10 failed attempts
+    
+    // Check failed attempts in last 24 hours
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM registration_attempts WHERE ip_address = ? AND status = 'failed' AND attempt_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+    $stmt->bind_param("s", $ip);
+    $stmt->execute();
+    $stmt->bind_result($count);
+    $stmt->fetch();
+    $stmt->close();
+    
+    return $count >= $maxFailedAttempts;
+}
+
+// Spam detection
+function isSpamContent($text) {
+    // Check for common spam patterns
+    $spamPatterns = [
+        '/🏆/u', // Trophy emoji
+        '/Поздравялем/u', // Russian text
+        '/https?:\/\/[^\s]+/i', // URLs
+        '/wilberies/i', // Spam keyword
+        '/акции/u', // Russian text
+        '/бесплатные/u', // Russian text
+        '/попытки/u', // Russian text
+        '/\{.*\}|\*.*\*|_.*_/u', // Excessive special characters
+    ];
+    
+    foreach ($spamPatterns as $pattern) {
+        if (preg_match($pattern, $text)) {
+            return true;
+        }
+    }
+    
+    // Check for excessive length (names shouldn't be too long)
+    if (strlen($text) > 50) {
+        return true;
+    }
+    
+    return false;
+}
 
 function sendVerificationEmail($toEmail, $firstName, $verificationCode) {
     global $smtpHost, $smtpPort, $smtpUsername, $smtpPassword, $fromEmail, $fromName;
@@ -81,7 +174,14 @@ function sendVerificationEmail($toEmail, $firstName, $verificationCode) {
     fread($socket, 4096);
     
     fwrite($socket, "RCPT TO: <$toEmail>\r\n");
-    fread($socket, 4096);
+    $rcptResponse = fread($socket, 4096);
+    
+    // Check if recipient is valid
+    if (strpos($rcptResponse, '250') === false) {
+        fwrite($socket, "QUIT\r\n");
+        fclose($socket);
+        return false;
+    }
     
     fwrite($socket, "DATA\r\n");
     fread($socket, 4096);
@@ -96,6 +196,11 @@ function sendVerificationEmail($toEmail, $firstName, $verificationCode) {
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $ip = $_SERVER['REMOTE_ADDR'];
+    $firstName = isset($_POST['first_name']) ? trim($_POST['first_name']) : '';
+    $lastName = isset($_POST['last_name']) ? trim($_POST['last_name']) : '';
+    $email = isset($_POST['email']) ? trim($_POST['email']) : '';
+    
     // Handle verification code submission
     if (isset($_POST['verify_code'])) {
         $enteredCode = trim($_POST['verification_code']);
@@ -113,21 +218,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $updateStmt->bind_param("s", $email);
             
             if ($updateStmt->execute()) {
+                // Log successful verification
+                logRegistrationAttempt($ip, $email, '', '', 'success', 'Email verified');
+                
                 // Clean up session
                 unset($_SESSION['temp_email']);
                 unset($_SESSION['verification_code']);
                 
-if (isset($_GET['modal'])) {
-    // For modal context, redirect to login within modal
-    echo '<script>document.querySelector("#signupFrame").src = "modal-login.php?modal=1";</script>';
-    exit();
-} else {
-    // Normal redirect for non-modal
-    header("Location: login.php?signup=success");
-    exit();
-}
+                if (isset($_GET['modal'])) {
+                    // For modal context, redirect to login within modal
+                    echo '<script>document.querySelector("#signupFrame").src = "modal-login.php?modal=1";</script>';
+                    exit();
+                } else {
+                    // Normal redirect for non-modal
+                    header("Location: login.php?signup=success");
+                    exit();
+                }
             } else {
                 $verificationError = "Database update failed. Please try again.";
+                logRegistrationAttempt($ip, $email, '', '', 'failed', 'Database update failed');
             }
             $updateStmt->close();
         } else {
@@ -139,8 +248,10 @@ if (isset($_GET['modal'])) {
             
             if ($expiredStmt->num_rows > 0) {
                 $verificationError = "Verification code has expired. Please request a new one.";
+                logRegistrationAttempt($ip, $email, '', '', 'failed', 'Expired verification code');
             } else {
                 $verificationError = "Invalid verification code. Please try again.";
+                logRegistrationAttempt($ip, $email, '', '', 'failed', 'Invalid verification code');
             }
             $expiredStmt->close();
             $showVerificationModal = true;
@@ -149,17 +260,34 @@ if (isset($_GET['modal'])) {
     } 
     // Handle initial signup
     else {
-        $firstName = trim($_POST['first_name']);
-        $lastName = trim($_POST['last_name']);
-        $email = trim($_POST['email']);
         $password = $_POST['password'];
         $terms = isset($_POST['terms']) ? 1 : 0;
 
-        if (empty($firstName) || empty($lastName) || empty($email) || empty($password) || !$terms) {
+        // Check if IP is blocked first
+        if (isIpBlocked()) {
+            $errorMsg = "Too many failed attempts from your network. Please try again later or contact support.";
+            logRegistrationAttempt($ip, $email, $firstName, $lastName, 'blocked', 'IP blocked due to too many failed attempts', true);
+        }
+        // Check rate limiting
+        elseif (!checkRateLimit()) {
+            $errorMsg = "Too many registration attempts. Please try again later.";
+            logRegistrationAttempt($ip, $email, $firstName, $lastName, 'blocked', 'Rate limit exceeded', true);
+        }
+        // Validate input
+        elseif (empty($firstName) || empty($lastName) || empty($email) || empty($password) || !$terms) {
             $errorMsg = "All fields are required and terms must be accepted.";
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            logRegistrationAttempt($ip, $email, $firstName, $lastName, 'failed', 'Missing required fields');
+        }
+        elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errorMsg = "Invalid email format.";
-        } else {
+            logRegistrationAttempt($ip, $email, $firstName, $lastName, 'failed', 'Invalid email format');
+        }
+        elseif (isSpamContent($firstName) || isSpamContent($lastName)) {
+            // Log the attempt but don't reveal it's spam detection
+            $errorMsg = "Invalid input detected. Please check your information.";
+            logRegistrationAttempt($ip, $email, $firstName, $lastName, 'failed', 'Spam content detected', true);
+        }
+        else {
             // Check if email exists
             $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
             $stmt->bind_param("s", $email);
@@ -168,6 +296,7 @@ if (isset($_GET['modal'])) {
 
             if ($stmt->num_rows > 0) {
                 $errorMsg = "Email is already registered.";
+                logRegistrationAttempt($ip, $email, $firstName, $lastName, 'failed', 'Email already registered');
             } else {
                 // Generate verification code
                 $verificationCode = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
@@ -187,13 +316,16 @@ if (isset($_GET['modal'])) {
                     // Send verification email using SMTP
                     if (sendVerificationEmail($email, $firstName, $verificationCode)) {
                         $showVerificationModal = true;
+                        logRegistrationAttempt($ip, $email, $firstName, $lastName, 'success', 'Verification email sent');
                     } else {
                         $errorMsg = "Failed to send verification email. Please try again.";
+                        logRegistrationAttempt($ip, $email, $firstName, $lastName, 'failed', 'Failed to send verification email');
                         // Rollback the insertion
                         $conn->query("DELETE FROM users WHERE email = '$email'");
                     }
                 } else {
                     $errorMsg = "Database error. Please try again.";
+                    logRegistrationAttempt($ip, $email, $firstName, $lastName, 'failed', 'Database error during registration');
                 }
                 $insertStmt->close();
             }
